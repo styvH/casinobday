@@ -1,3 +1,25 @@
+<style>
+/* Masquer la scrollbar native et afficher une barre rouge au scroll */
+.classement-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #b91c1c transparent;
+}
+.classement-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    background: transparent;
+}
+.classement-scrollbar::-webkit-scrollbar-thumb {
+    background: #b91c1c;
+    border-radius: 8px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.classement-scrollbar:hover::-webkit-scrollbar-thumb,
+.classement-scrollbar:active::-webkit-scrollbar-thumb,
+.classement-scrollbar:focus::-webkit-scrollbar-thumb {
+    opacity: 1;
+}
+</style>
 @php
     $solde = 12500; // fictif
     $pariesEnCours = 3;
@@ -6,6 +28,68 @@
 @endphp
 
 <div class="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-red-900 via-black to-red-700 text-white">
+@php
+    // Données fictives pour le classement
+    $classementJoueurs = [];
+    for ($i = 1; $i <= 50; $i++) {
+        $classementJoueurs[] = [
+            'pseudo' => 'Joueur' . $i,
+            'points' => rand(1000, 20000)
+        ];
+    }
+    // Tri décroissant par points
+    usort($classementJoueurs, function($a, $b) {
+        return $b['points'] <=> $a['points'];
+    });
+@endphp
+
+    <!-- Classement flottant à droite -->
+    <div class="fixed inset-y-1/2 right-8 z-50 flex items-center" style="transform: translateY(-50%);">
+    <div class="bg-black bg-opacity-80 border-l-4 border-red-800 rounded-l-xl shadow-xl w-80 max-h-[70vh] overflow-y-auto flex flex-col classement-scrollbar" style="cursor: pointer;">
+            <div class="px-6 py-4 flex items-center justify-center">
+                <span class="text-xl font-bold text-red-400">🏆 Classement Top 50</span>
+            </div>
+            <ul class="px-6 py-2">
+                @foreach($classementJoueurs as $index => $joueur)
+                    @if($index < 10)
+                        <li class="flex items-center justify-between mb-2 p-2 rounded-lg transition
+                            @if($index == 0) bg-yellow-400 bg-opacity-30 font-extrabold @elseif($index == 1) bg-gray-300 bg-opacity-30 font-bold @elseif($index == 2) bg-orange-400 bg-opacity-30 font-bold @elseif($index < 10) bg-red-900 bg-opacity-40 font-semibold text-white border border-red-700 @endif
+                            @if($index < 3) shadow-lg @endif
+                            @if($index < 10) ring-2 ring-red-500 @endif">
+                            <div class="flex items-center gap-2">
+                                <span class="text-lg font-bold">{{ $index+1 }}</span>
+                                @if($index == 0)
+                                    <span class="text-2xl">🥇</span>
+                                @elseif($index == 1)
+                                    <span class="text-2xl">🥈</span>
+                                @elseif($index == 2)
+                                    <span class="text-2xl">🥉</span>
+                                @endif
+                                <span>{{ $joueur['pseudo'] }}</span>
+                            </div>
+                            <span class="font-mono">{{ number_format($joueur['points'], 0, ',', ' ') }} pts</span>
+                        </li>
+                    @endif
+                @endforeach
+            </ul>
+            <details class="px-6 py-2">
+                <summary class="cursor-pointer text-red-400 hover:underline">Voir le reste du classement</summary>
+                <ul class="mt-2">
+                    @foreach($classementJoueurs as $index => $joueur)
+                        @if($index >= 10)
+                            <li class="flex items-center justify-between mb-1 p-1 rounded transition bg-black bg-opacity-30 text-gray-300">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-bold">{{ $index+1 }}</span>
+                                    <span>{{ $joueur['pseudo'] }}</span>
+                                </div>
+                                <span class="font-mono text-xs">{{ number_format($joueur['points'], 0, ',', ' ') }} pts</span>
+                            </li>
+                        @endif
+                    @endforeach
+                </ul>
+            </details>
+        </div>
+    </div>
     <main class="w-full max-w-3xl bg-black bg-opacity-80 rounded-xl shadow-lg p-8 border-4 border-red-800">
         <h2 class="text-4xl font-bold mb-6 text-center text-red-500">Dashboard Joueur</h2>
         <div class="flex flex-col items-center mb-8">
