@@ -98,7 +98,12 @@
         <h2 class="text-2xl md:text-4xl font-bold mb-4 md:mb-6 text-center text-red-500">Dashboard Joueur</h2>
         <div class="flex flex-col items-center mb-6 md:mb-8">
             <div class="text-xl md:text-2xl font-semibold mb-1 md:mb-2">Solde du compte</div>
-            <div class="text-3xl md:text-5xl font-extrabold text-red-400 mb-3 md:mb-4">{{ number_format($solde, 0, ',', ' ') }} €</div>
+            <div class="flex items-center gap-3 mb-3 md:mb-4">
+                <div class="text-3xl md:text-5xl font-extrabold text-red-400">{{ number_format($solde, 0, ',', ' ') }} €</div>
+                <button class="text-xs md:text-sm px-3 py-2 md:py-2 bg-red-700 hover:bg-red-800 rounded-lg font-semibold shadow ring-1 ring-red-500/60 hover:ring-red-400 transition">
+                    Faire un don
+                </button>
+            </div>
             <div class="grid grid-cols-3 gap-3 md:gap-6 mb-4 md:mb-6 w-full">
                 <div class="bg-red-900 bg-opacity-80 rounded-lg p-2 md:p-4 text-center">
                     <div class="text-xs md:text-lg font-bold">Paries en cours</div>
