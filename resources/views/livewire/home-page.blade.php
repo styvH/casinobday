@@ -19,7 +19,7 @@
             </div>
         </div>
         <div class="mt-8 text-center">
-            <button class="px-6 py-3 bg-red-700 hover:bg-red-900 text-white font-bold rounded-full shadow-lg transition">Commencer à jouer</button>
+            <a href="{{ route('dashboard.joueur') }}" class="px-6 py-3 bg-red-700 hover:bg-red-900 text-white font-bold rounded-full shadow-lg transition inline-block">Commencer à jouer</a>
         </div>
     </main>
     <footer class="mt-12 text-sm text-gray-400">&copy; 2025 Casino B'Day. Inspiré par Kakegurui.</footer>

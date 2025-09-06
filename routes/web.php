@@ -15,4 +15,8 @@ use Illuminate\Support\Facades\Route;
 
 use App\Livewire\HomePage;
 
-Route::get('/', HomePage::class);
+Route::get('/', HomePage::class)->name('home');
+
+use App\Livewire\DashboardJoueur;
+
+Route::get('/player/dashboard', DashboardJoueur::class)->name('dashboard.joueur');
