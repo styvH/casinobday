@@ -456,6 +456,14 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="p-6 space-y-6 overflow-y-auto classement-scrollbar text-sm">
         <p class="text-xs text-gray-400 leading-relaxed">Modifiez votre pseudo ou votre mot de passe. (Front-end démo uniquement.)</p>
 
+        @if($isAdmin ?? false)
+        <div class="bg-red-900/20 border border-red-800/40 rounded-lg p-4 space-y-3">
+            <h4 class="text-sm font-semibold text-red-300 flex items-center gap-2">🛠️ Espace Admin</h4>
+            <p class="text-[11px] text-gray-400">Accédez aux outils de gestion.</p>
+            <button id="openAdminBtn" type="button" class="px-3 py-2 rounded-md bg-red-700 hover:bg-red-800 text-xs font-semibold shadow ring-1 ring-red-500/40">Outils Admin</button>
+        </div>
+        @endif
+
         <div class="space-y-4">
             <label class="flex items-center gap-2 text-xs font-semibold text-red-300 select-none">
                 <input id="settingsChangePseudo" type="checkbox" class="h-4 w-4 rounded border-red-700 bg-black/60 text-red-600 focus:ring-red-600" />
@@ -504,6 +512,97 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <!-- Modal Déconnexion -->
+
+@if($isAdmin ?? false)
+<!-- Modal Admin -->
+<div id="modalAdmin" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/75 backdrop-blur-sm">
+  <div class="w-11/12 md:w-3/4 lg:w-3/5 xl:w-1/2 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-red-800">
+        <h3 class="text-lg md:text-2xl font-bold text-red-400 flex items-center gap-2">🛠️ Administration</h3>
+        <button data-close="modalAdmin" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
+    </div>
+    <div class="p-6 space-y-8 overflow-y-auto classement-scrollbar text-sm">
+        <div class="space-y-4">
+            <h4 class="text-sm font-semibold text-red-300 flex items-center gap-2">➕ Ajouter un joueur</h4>
+            <form wire:submit.prevent="adminCreatePlayer" class="space-y-4">
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-red-300 mb-1">Nom / Pseudo</label>
+                        <input wire:model.defer="newPlayerName" type="text" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-600" />
+                        @error('newPlayerName') <span class="text-[10px] text-red-400">{{ $message }}</span> @enderror
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-red-300 mb-1">Email</label>
+                        <input wire:model.defer="newPlayerEmail" type="email" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-600" />
+                        @error('newPlayerEmail') <span class="text-[10px] text-red-400">{{ $message }}</span> @enderror
+                    </div>
+                </div>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-red-300 mb-1">Mot de passe</label>
+                        <input wire:model.defer="newPlayerPassword" type="password" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-600" />
+                        @error('newPlayerPassword') <span class="text-[10px] text-red-400">{{ $message }}</span> @enderror
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-red-300 mb-1">Solde initial (€)</label>
+                        <input wire:model.defer="newPlayerBalance" type="number" step="0.01" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-600" />
+                        @error('newPlayerBalance') <span class="text-[10px] text-red-400">{{ $message }}</span> @enderror
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-xs font-semibold ring-1 ring-red-500/50">Créer</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="space-y-4">
+            <h4 class="text-sm font-semibold text-red-300 flex items-center gap-2">💶 Injection monétaire</h4>
+            <form wire:submit.prevent="adminInjectFunds" class="space-y-4">
+                <div class="grid md:grid-cols-3 gap-4 items-start">
+                    <div class="md:col-span-1">
+                        <label class="block text-[11px] font-semibold text-red-300 mb-1">Montant (€)</label>
+                        <input wire:model.defer="injectionAmount" type="number" step="0.01" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-600" />
+                        @error('injectionAmount') <span class="text-[10px] text-red-400">{{ $message }}</span> @enderror
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-[11px] font-semibold text-red-300 mb-1">Portée</label>
+                        <select wire:model="injectionScope" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-600">
+                            <option value="all">Tous les joueurs</option>
+                            <option value="selected">Liste sélectionnée</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-1" x-data>
+                        <label class="block text-[11px] font-semibold text-red-300 mb-1">Joueurs (si sélection)</label>
+                        <select wire:model="injectionSelected" multiple size="4" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-red-600">
+                            @foreach(($allPlayers ?? collect()) as $p)
+                                <option value="{{ $p->id }}">{{ $p->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('injectionSelected') <span class="text-[10px] text-red-400">{{ $message }}</span> @enderror
+                    </div>
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-xs font-semibold ring-1 ring-red-500/50">Injecter</button>
+                </div>
+            </form>
+        </div>
+
+        <div>
+            @if($adminMessage)
+                <div class="text-[11px] text-emerald-400 font-semibold">{{ $adminMessage }}</div>
+            @endif
+            @if($adminError)
+                <div class="text-[11px] text-red-400 font-semibold">{{ $adminError }}</div>
+            @endif
+        </div>
+        <div class="text-[10px] text-gray-500">Toutes les opérations sont journalisées dans les transactions.</div>
+    </div>
+    <div class="px-5 py-4 border-t border-red-800 bg-black/60 flex justify-end gap-3">
+        <button data-close="modalAdmin" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs md:text-sm font-semibold">Fermer</button>
+    </div>
+  </div>
+</div>
+@endif
 <div id="modalLogout" class="fixed inset-0 z-[59] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
     <div class="w-11/12 max-w-sm bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-xl shadow-2xl p-6 flex flex-col gap-5">
         <div class="flex items-start gap-3">
@@ -610,6 +709,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Settings refs
     const openSettingsBtn = document.getElementById('openSettingsBtn');
     const modalSettings = document.getElementById('modalSettings');
+    const openAdminBtn = document.getElementById('openAdminBtn');
+    const modalAdmin = document.getElementById('modalAdmin');
     const settingsChangePseudo = document.getElementById('settingsChangePseudo');
     const settingsPseudoFields = document.getElementById('settingsPseudoFields');
     const settingsNewPseudo = document.getElementById('settingsNewPseudo');
@@ -915,6 +1016,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if(settingsConfirmPassword) settingsConfirmPassword.value='';
         toggleSettingsFields();
         openModal(modalSettings);
+    });
+    openAdminBtn && openAdminBtn.addEventListener('click', () => {
+        openModal(modalAdmin);
     });
 
     settingsSaveBtn && settingsSaveBtn.addEventListener('click', () => {
