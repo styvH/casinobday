@@ -101,8 +101,11 @@
             <div class="text-xl md:text-2xl font-semibold mb-1 md:mb-2">Solde du compte</div>
             <div class="flex items-center gap-3 mb-3 md:mb-4">
                 <div class="text-3xl md:text-5xl font-extrabold text-red-400">{{ number_format($solde, 0, ',', ' ') }} €</div>
-                <button class="text-xs md:text-sm px-3 py-2 md:py-2 bg-red-700 hover:bg-red-800 rounded-lg font-semibold shadow ring-1 ring-red-500/60 hover:ring-red-400 transition">
-                    Faire un don
+                <button id="openDonationBtn" class="group relative text-xs md:text-sm px-3 py-2 md:py-2 bg-gradient-to-r from-red-800 to-red-600 hover:from-red-700 hover:to-red-500 rounded-lg font-semibold shadow ring-1 ring-red-500/60 hover:ring-red-300 transition overflow-hidden">
+                    <span class="relative z-10 flex items-center gap-1">
+                        💝 <span>Faire un don</span>
+                    </span>
+                    <span class="absolute inset-0 opacity-0 group-hover:opacity-15 bg-white/10 transition"></span>
                 </button>
             </div>
             <div class="grid grid-cols-3 gap-3 md:gap-6 mb-4 md:mb-6 w-full">
@@ -385,6 +388,56 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
     <div class="px-5 py-4 border-t border-red-800 bg-black/60 flex justify-end gap-3">
         <button data-close="modalBlackjack" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs md:text-sm font-semibold">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Donation -->
+<div id="modalDonation" class="fixed inset-0 z-[58] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
+  <div class="w-11/12 md:w-2/3 lg:w-1/2 xl:w-2/5 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-red-800">
+        <h3 class="text-lg md:text-2xl font-bold text-red-400 flex items-center gap-2">💝 Faire un don</h3>
+        <button data-close="modalDonation" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
+    </div>
+    <div class="p-6 space-y-6 overflow-y-auto classement-scrollbar text-sm">
+        <p class="text-xs text-gray-400 leading-relaxed">Transférez une somme fictive à un joueur. Aucune transaction réelle. Les montants sont simulés.</p>
+
+        <div class="space-y-3">
+            <label class="block text-xs font-semibold text-red-300">Destinataire</label>
+            <div class="relative">
+                <input id="donationSearchJoueur" type="text" placeholder="Rechercher pseudo ou ID..." class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2 text-xs pr-10" />
+                <div id="donationResultatsRechercheJoueur" class="absolute z-10 mt-1 w-full bg-gray-900 border border-red-800 rounded-lg shadow-lg hidden max-h-52 overflow-y-auto text-xs"></div>
+            </div>
+            <div id="donationRecipientContainer" class="min-h-[2.2rem] flex items-center gap-2 p-2 bg-black/40 rounded border border-red-800/40 text-[11px] text-gray-400"></div>
+        </div>
+
+        <div class="space-y-3">
+            <label class="block text-xs font-semibold text-red-300">Montant (€)</label>
+            <div class="grid grid-cols-3 gap-3 items-end">
+                <div class="col-span-2">
+                    <input id="donationAmount" type="number" min="1" step="50" value="500" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-4 py-2 text-sm" />
+                </div>
+                <div class="flex flex-wrap gap-2 justify-end text-[10px]">
+                    <button type="button" data-don-quick="500" class="px-2 py-1 rounded bg-red-800/40 hover:bg-red-700/60">500</button>
+                    <button type="button" data-don-quick="1000" class="px-2 py-1 rounded bg-red-800/40 hover:bg-red-700/60">1 000</button>
+                    <button type="button" data-don-quick="2500" class="px-2 py-1 rounded bg-red-800/40 hover:bg-red-700/60">2 500</button>
+                    <button type="button" data-don-quick="5000" class="px-2 py-1 rounded bg-red-800/40 hover:bg-red-700/60">5 000</button>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 text-[11px] text-gray-400">
+                <span>Frais: <span id="donationFees" class="text-gray-300">0 €</span></span>
+                <span>Net reçu: <span id="donationNet" class="text-emerald-400 font-semibold">0 €</span></span>
+            </div>
+        </div>
+
+        <div class="bg-red-900/20 border border-red-800/40 rounded-lg p-4 text-[11px] text-gray-300 leading-relaxed">
+            Simulation d'interface. Les dons sont ajoutés à l'historique local comme transaction.
+        </div>
+        <div id="donationError" class="text-[11px] text-red-400 font-semibold hidden"></div>
+    </div>
+    <div class="px-5 py-4 border-t border-red-800 bg-black/60 flex justify-end gap-3">
+        <button data-close="modalDonation" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs md:text-sm font-semibold">Annuler</button>
+        <button id="confirmDonationBtn" class="px-5 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-xs md:text-sm font-bold shadow ring-1 ring-red-500/50">Envoyer</button>
     </div>
   </div>
 </div>
@@ -736,6 +789,97 @@ document.addEventListener('DOMContentLoaded', () => {
     historyShowMoreBtn && historyShowMoreBtn.addEventListener('click', () => {
         historyVisibleCount += HISTORY_PAGE_SIZE;
         renderHistory();
+    });
+
+    // Donation modal logic
+    const modalDonation = document.getElementById('modalDonation');
+    const openDonationBtn = document.getElementById('openDonationBtn');
+    const donationSearchJoueur = document.getElementById('donationSearchJoueur');
+    const donationResultatsRechercheJoueur = document.getElementById('donationResultatsRechercheJoueur');
+    const donationRecipientContainer = document.getElementById('donationRecipientContainer');
+    const donationAmount = document.getElementById('donationAmount');
+    const donationFees = document.getElementById('donationFees');
+    const donationNet = document.getElementById('donationNet');
+    const confirmDonationBtn = document.getElementById('confirmDonationBtn');
+    const donationError = document.getElementById('donationError');
+    let donationRecipient = null;
+
+    openDonationBtn && openDonationBtn.addEventListener('click', () => {
+        donationRecipient = null;
+        donationRecipientContainer.innerHTML = '<span class="text-[11px] text-gray-500">Aucun destinataire sélectionné</span>';
+        donationSearchJoueur.value='';
+        donationAmount.value = '500';
+        updateDonationComputed();
+        openModal(modalDonation);
+    });
+
+    function updateDonationComputed(){
+        const val = parseFloat(donationAmount.value)||0;
+        const fees = Math.round(val * 0.02); // 2% frais fictifs
+        const net = Math.max(0, val - fees);
+        donationFees.textContent = fees.toLocaleString('fr-FR') + ' €';
+        donationNet.textContent = net.toLocaleString('fr-FR') + ' €';
+    }
+    donationAmount && donationAmount.addEventListener('input', updateDonationComputed);
+    document.querySelectorAll('[data-don-quick]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+            donationAmount.value = btn.getAttribute('data-don-quick');
+            updateDonationComputed();
+        });
+    });
+
+    function searchDonationUsers(term){
+        const t = term.toLowerCase();
+        return poolUtilisateurs.filter(u=> u.pseudo.toLowerCase().includes(t) || (''+u.id).includes(t)).slice(0,8);
+    }
+    function renderDonationSearch(){
+        const term = donationSearchJoueur.value.trim();
+        if(!term){ donationResultatsRechercheJoueur.classList.add('hidden'); donationResultatsRechercheJoueur.innerHTML=''; return; }
+        const res = searchDonationUsers(term);
+        if(!res.length){ donationResultatsRechercheJoueur.innerHTML='<div class="px-3 py-2 text-gray-500">Aucun résultat</div>'; donationResultatsRechercheJoueur.classList.remove('hidden'); return; }
+        donationResultatsRechercheJoueur.innerHTML = res.map(r=>`<button type="button" data-don-select="${r.id}" class="w-full text-left px-3 py-2 hover:bg-red-800/40 flex justify-between items-center"> <span>${r.pseudo}</span><span class='text-[10px] text-gray-400'>#${r.id}</span></button>`).join('');
+        donationResultatsRechercheJoueur.classList.remove('hidden');
+        donationResultatsRechercheJoueur.querySelectorAll('[data-don-select]').forEach(b=>{
+            b.addEventListener('click', ()=>{
+                const id = parseInt(b.getAttribute('data-don-select'));
+                const user = poolUtilisateurs.find(u=>u.id===id);
+                donationRecipient = user;
+                donationRecipientContainer.innerHTML = `<div class='flex items-center gap-2 bg-red-800/30 border border-red-700/50 px-3 py-2 rounded'>
+                    <span class='text-red-200 font-semibold text-xs'>${user.pseudo}</span>
+                    <button type='button' id='donationRemoveRecipient' class='text-red-300 hover:text-white font-bold text-xs'>×</button>
+                </div>`;
+                document.getElementById('donationRemoveRecipient').addEventListener('click', ()=>{
+                    donationRecipient = null; donationRecipientContainer.innerHTML='<span class="text-[11px] text-gray-500">Aucun destinataire sélectionné</span>';
+                });
+                donationResultatsRechercheJoueur.classList.add('hidden');
+                donationSearchJoueur.value='';
+            });
+        });
+    }
+    donationSearchJoueur && donationSearchJoueur.addEventListener('input', renderDonationSearch);
+
+    function setDonationError(msg){
+        if(!donationError) return; if(!msg){ donationError.classList.add('hidden'); donationError.textContent=''; return; }
+        donationError.textContent = msg; donationError.classList.remove('hidden');
+    }
+    confirmDonationBtn && confirmDonationBtn.addEventListener('click', () => {
+        setDonationError('');
+        const amount = parseFloat(donationAmount.value)||0;
+        if(!donationRecipient){ return setDonationError('Sélectionnez un destinataire'); }
+        if(amount <= 0){ return setDonationError('Montant invalide'); }
+        // Append to history (front only)
+        mockHistory.unshift({
+            id: mockHistory.length+1,
+            type: 'transaction',
+            icon: '💝',
+            amount: -amount,
+            desc: 'Don à '+donationRecipient.pseudo,
+            ts: Date.now()
+        });
+        // Reset filter to show added item if already open
+        resetHistory();
+        alert('(Démo) Don envoyé à '+donationRecipient.pseudo+' de '+amount.toLocaleString('fr-FR')+' €');
+        closeModal(modalDonation);
     });
 
     function bjCreateDeck(){
