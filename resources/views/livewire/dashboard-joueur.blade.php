@@ -120,7 +120,7 @@
                 </div>
             </div>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8 mb-6 md:mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8 mb-6 md:mb-8">
             <button id="openPariModalBtn" class="px-4 md:px-6 py-3 md:py-4 bg-red-700 hover:bg-red-900 text-white font-bold rounded-xl shadow-lg transition flex flex-col items-center text-sm md:text-base">
                 <span class="text-xl md:text-2xl mb-1 md:mb-2">🎲</span>
                 Lancer un pari
@@ -132,6 +132,10 @@
             <button class="px-4 md:px-6 py-3 md:py-4 bg-red-900 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition flex flex-col items-center text-sm md:text-base">
                 <span class="text-xl md:text-2xl mb-1 md:mb-2">📜</span>
                 Historique
+            </button>
+            <button id="openBlackjackBtn" class="px-4 md:px-6 py-3 md:py-4 bg-black hover:bg-red-800 text-white font-bold rounded-xl shadow-lg border border-red-700 transition flex flex-col items-center text-sm md:text-base">
+                <span class="text-xl md:text-2xl mb-1 md:mb-2">🃏</span>
+                Blackjack
             </button>
         </div>
         <div class="mt-6 md:mt-8 text-center">
@@ -307,6 +311,80 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
+<!-- Modal Blackjack -->
+<div id="modalBlackjack" class="fixed inset-0 z-[80] hidden items-center justify-center bg-black/80 backdrop-blur-sm">
+  <div class="w-11/12 md:w-3/4 lg:w-2/3 xl:w-1/2 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[95vh] overflow-hidden flex flex-col">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-red-800">
+        <h3 class="text-lg md:text-2xl font-bold text-red-400 flex items-center gap-2">🃏 Blackjack</h3>
+        <button data-close="modalBlackjack" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
+    </div>
+    <div class="flex-1 p-5 overflow-y-auto classement-scrollbar text-sm space-y-6" id="blackjackContent">
+        <!-- Section mise initiale -->
+        <div id="blackjackStartSection" class="space-y-4">
+            <p class="text-xs text-gray-400 leading-relaxed">Saisissez votre mise pour démarrer une partie. Démo locale uniquement (aucun impact réel).</p>
+            <div class="grid md:grid-cols-3 gap-4 items-end">
+                <div class="md:col-span-1">
+                    <label class="block text-[11px] font-semibold text-red-300 mb-1">Mise (€)</label>
+                    <input id="blackjackBetInput" type="number" min="100" step="50" value="500" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2" />
+                </div>
+                <div class="md:col-span-2 flex flex-wrap gap-2 text-[11px]">
+                    <button type="button" data-bj-bet-quick="500" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">500</button>
+                    <button type="button" data-bj-bet-quick="1000" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">1 000</button>
+                    <button type="button" data-bj-bet-quick="2500" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">2 500</button>
+                    <button type="button" data-bj-bet-quick="5000" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">5 000</button>
+                </div>
+            </div>
+            <div class="flex justify-end">
+                <button id="blackjackStartBtn" class="px-5 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-xs md:text-sm font-bold shadow ring-1 ring-red-500/50">Démarrer</button>
+            </div>
+        </div>
+        <!-- Section jeu -->
+        <div id="blackjackGameSection" class="hidden space-y-5">
+            <div class="grid md:grid-cols-2 gap-5">
+                <div class="bg-black/40 rounded-xl p-4 border border-red-800/40">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-semibold text-red-300">Croupier</h4>
+                        <span id="blackjackDealerValue" class="text-xs text-gray-400">0</span>
+                    </div>
+                    <div id="blackjackDealerHand" class="flex flex-wrap gap-2 min-h-[52px]"></div>
+                </div>
+                <div class="bg-black/40 rounded-xl p-4 border border-red-800/40">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="font-semibold text-red-300">Joueur</h4>
+                        <span id="blackjackPlayerValue" class="text-xs text-gray-400">0</span>
+                    </div>
+                    <div id="blackjackPlayerHand" class="flex flex-wrap gap-2 min-h-[52px]"></div>
+                </div>
+            </div>
+            <div class="bg-black/50 border border-red-800/40 rounded-xl p-4 space-y-3">
+                <div class="flex flex-wrap gap-3">
+                    <button id="blackjackHitBtn" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-xs md:text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">Tirer</button>
+                    <button id="blackjackStandBtn" class="px-4 py-2 rounded-lg bg-black/70 border border-red-700 hover:bg-red-800 text-xs md:text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">Rester</button>
+                    <button id="blackjackRestartBtn" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs md:text-sm font-semibold hidden">Rejouer</button>
+                </div>
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-[11px]">
+                    <div id="blackjackStatus" class="font-semibold text-red-300">Partie en cours...</div>
+                    <div class="flex items-center gap-2">
+                        <div class="bg-red-900/30 px-3 py-2 rounded-lg border border-red-800/40">
+                            <span class="uppercase text-[10px] text-gray-400">Mise</span>
+                            <div id="blackjackBetDisplay" class="text-sm font-bold text-red-400">0 €</div>
+                        </div>
+                        <div class="bg-green-900/20 px-3 py-2 rounded-lg border border-green-700/40">
+                            <span class="uppercase text-[10px] text-gray-400">Gain Pot.</span>
+                            <div id="blackjackWinDisplay" class="text-sm font-bold text-green-400">0 €</div>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-[10px] text-gray-500 italic">Blackjack paie 3:2. Démo locale.</p>
+            </div>
+        </div>
+    </div>
+    <div class="px-5 py-4 border-t border-red-800 bg-black/60 flex justify-end gap-3">
+        <button data-close="modalBlackjack" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs md:text-sm font-semibold">Fermer</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // Gestion des modals et paris fictifs
 document.addEventListener('DOMContentLoaded', () => {
@@ -345,6 +423,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const arbitreObligatoireBadge = document.getElementById('arbitreObligatoireBadge');
     const inscriptionTotalPotentiel = document.getElementById('inscriptionTotalPotentiel');
     const messageErreurInscription = document.getElementById('messageErreurInscription');
+    // Blackjack refs
+    const openBlackjackBtn = document.getElementById('openBlackjackBtn');
+    const modalBlackjack = document.getElementById('modalBlackjack');
+    const blackjackStartSection = document.getElementById('blackjackStartSection');
+    const blackjackGameSection = document.getElementById('blackjackGameSection');
+    const blackjackBetInput = document.getElementById('blackjackBetInput');
+    const blackjackStartBtn = document.getElementById('blackjackStartBtn');
+    const blackjackPlayerHand = document.getElementById('blackjackPlayerHand');
+    const blackjackDealerHand = document.getElementById('blackjackDealerHand');
+    const blackjackDealerValue = document.getElementById('blackjackDealerValue');
+    const blackjackPlayerValue = document.getElementById('blackjackPlayerValue');
+    const blackjackStatus = document.getElementById('blackjackStatus');
+    const blackjackHitBtn = document.getElementById('blackjackHitBtn');
+    const blackjackStandBtn = document.getElementById('blackjackStandBtn');
+    const blackjackRestartBtn = document.getElementById('blackjackRestartBtn');
+    const blackjackBetDisplay = document.getElementById('blackjackBetDisplay');
+    const blackjackWinDisplay = document.getElementById('blackjackWinDisplay');
 
     let pariSelectionne = null;
 
@@ -492,6 +587,146 @@ document.addEventListener('DOMContentLoaded', () => {
     const poolUtilisateurs = Array.from({length: 40}).map((_,i)=>({id:i+1,pseudo:'Joueur'+(i+1)}));
     let joueursSelectionnes = [];
     let arbitre = null;
+    // Blackjack state
+    let bjDeck = [];
+    let bjPlayer = [];
+    let bjDealer = [];
+    let bjBet = 0;
+    let bjFinished = false;
+
+    function bjCreateDeck(){
+        const suits = ['♠','♥','♦','♣'];
+        const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+        const deck = [];
+        suits.forEach(s => ranks.forEach(r => deck.push({suit:s, rank:r})));
+        // shuffle
+        for(let i=deck.length-1;i>0;i--){
+            const j = Math.floor(Math.random()* (i+1));
+            [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+        return deck;
+    }
+    function bjCardValue(card){
+        if(card.rank==='A') return 11;
+        if(['K','Q','J'].includes(card.rank)) return 10;
+        return parseInt(card.rank,10);
+    }
+    function bjHandValue(hand){
+        let total = 0; let aces = 0;
+        hand.forEach(c=>{ total += bjCardValue(c); if(c.rank==='A') aces++; });
+        while(total>21 && aces>0){ total -=10; aces--; }
+        return total;
+    }
+    function bjDeal(){ return bjDeck.shift(); }
+    function bjRenderHands(revealDealer=false){
+        blackjackPlayerHand.innerHTML = bjPlayer.map(c=> bjRenderCard(c)).join('');
+        if(!revealDealer){
+            const first = bjDealer[0];
+            blackjackDealerHand.innerHTML = bjRenderCard(first) + bjHiddenCard();
+        } else {
+            blackjackDealerHand.innerHTML = bjDealer.map(c=> bjRenderCard(c)).join('');
+        }
+        blackjackPlayerValue.textContent = bjHandValue(bjPlayer);
+        blackjackDealerValue.textContent = revealDealer? bjHandValue(bjDealer) : bjCardValue(bjDealer[0]);
+    }
+    function bjRenderCard(card){
+        const isRed = ['♥','♦'].includes(card.suit);
+        return `<div class="w-10 h-14 rounded-md border border-red-700/40 bg-black/60 flex flex-col items-center justify-center text-xs font-semibold ${isRed?'text-red-300':'text-gray-200'} shadow">
+            <span>${card.rank}</span><span class="text-[10px]">${card.suit}</span>
+        </div>`;
+    }
+    function bjHiddenCard(){
+        return `<div class="w-10 h-14 rounded-md border border-red-800/60 bg-red-900/60 flex items-center justify-center text-[10px] text-red-200 animate-pulse">? ?</div>`;
+    }
+    function bjStart(){
+        bjDeck = bjCreateDeck();
+        bjPlayer = [bjDeal(), bjDeal()];
+        bjDealer = [bjDeal(), bjDeal()];
+        bjFinished = false;
+        blackjackStatus.textContent = 'Partie en cours...';
+        blackjackHitBtn.disabled = false;
+        blackjackStandBtn.disabled = false;
+        blackjackRestartBtn.classList.add('hidden');
+        bjRenderHands(false);
+        bjCheckImmediate();
+    }
+    function bjCheckImmediate(){
+        const pv = bjHandValue(bjPlayer);
+        const dv = bjHandValue(bjDealer);
+        if(pv===21 || dv===21){
+            bjFinish();
+        }
+    }
+    function bjFinish(){
+        bjFinished = true;
+        blackjackHitBtn.disabled = true;
+        blackjackStandBtn.disabled = true;
+        blackjackRestartBtn.classList.remove('hidden');
+        bjRenderHands(true);
+        const pv = bjHandValue(bjPlayer);
+        const dv = bjHandValue(bjDealer);
+        let outcome = '';
+        let win = 0;
+        const playerBJ = (pv===21 && bjPlayer.length===2);
+        const dealerBJ = (dv===21 && bjDealer.length===2);
+        if(playerBJ && dealerBJ){ outcome='Push (Blackjack)'; win = bjBet; }
+        else if(playerBJ){ outcome='Blackjack !'; win = bjBet * 2.5; }
+        else if(dealerBJ){ outcome='Croupier Blackjack'; win = 0; }
+        else if(pv>21){ outcome='Bust joueur'; win = 0; }
+        else if(dv>21){ outcome='Croupier bust'; win = bjBet*2; }
+        else if(pv>dv){ outcome='Victoire joueur'; win = bjBet*2; }
+        else if(pv<dv){ outcome='Défaite'; win = 0; }
+        else { outcome='Push'; win = bjBet; }
+        blackjackStatus.textContent = outcome + ' | Total Joueur '+pv+' / Croupier '+dv;
+        blackjackWinDisplay.textContent = win.toLocaleString('fr-FR') + ' €';
+    }
+    function bjDealerPlay(){
+        while(bjHandValue(bjDealer) < 17){
+            bjDealer.push(bjDeal());
+        }
+    }
+    // Events Blackjack
+    openBlackjackBtn && openBlackjackBtn.addEventListener('click', () => {
+        blackjackStartSection.classList.remove('hidden');
+        blackjackGameSection.classList.add('hidden');
+        openModal(modalBlackjack);
+    });
+    document.querySelectorAll('[data-bj-bet-quick]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+            const v = btn.getAttribute('data-bj-bet-quick');
+            blackjackBetInput.value = v;
+        });
+    });
+    blackjackStartBtn && blackjackStartBtn.addEventListener('click', () => {
+        const v = parseFloat(blackjackBetInput.value)||0;
+        if(v < 100){
+            blackjackBetInput.classList.add('ring','ring-red-600');
+            setTimeout(()=>blackjackBetInput.classList.remove('ring','ring-red-600'),800);
+            return;
+        }
+        bjBet = v;
+        blackjackBetDisplay.textContent = v.toLocaleString('fr-FR') + ' €';
+        blackjackWinDisplay.textContent = '0 €';
+        blackjackStartSection.classList.add('hidden');
+        blackjackGameSection.classList.remove('hidden');
+        bjStart();
+    });
+    blackjackHitBtn && blackjackHitBtn.addEventListener('click', () => {
+        if(bjFinished) return;
+        bjPlayer.push(bjDeal());
+        bjRenderHands(false);
+        if(bjHandValue(bjPlayer) >= 21){
+            bjFinish();
+        }
+    });
+    blackjackStandBtn && blackjackStandBtn.addEventListener('click', () => {
+        if(bjFinished) return;
+        bjDealerPlay();
+        bjFinish();
+    });
+    blackjackRestartBtn && blackjackRestartBtn.addEventListener('click', () => {
+        bjStart();
+    });
 
     function renderJoueursSelectionnes(){
         if(!listeJoueursSelectionnes) return;
