@@ -106,10 +106,10 @@
                 </button>
             </div>
             <div class="grid grid-cols-3 gap-3 md:gap-6 mb-4 md:mb-6 w-full">
-                <div class="bg-red-900 bg-opacity-80 rounded-lg p-2 md:p-4 text-center">
+                <button id="btnPariesEnCours" type="button" class="bg-red-900 bg-opacity-80 rounded-lg p-2 md:p-4 text-center focus:outline-none focus:ring-2 focus:ring-red-600 hover:bg-red-800 transition">
                     <div class="text-xs md:text-lg font-bold">Paries en cours</div>
                     <div class="text-xl md:text-3xl">{{ $pariesEnCours }}</div>
-                </div>
+                </button>
                 <div class="bg-black bg-opacity-80 rounded-lg p-2 md:p-4 text-center border border-red-700">
                     <div class="text-xs md:text-lg font-bold">Total Mise</div>
                     <div class="text-xl md:text-3xl">{{ number_format($totalMise, 0, ',', ' ') }} €</div>
@@ -169,6 +169,21 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 </div>
+
+<!-- Modal Paris En Cours -->
+<div id="modalPariesEnCours" class="fixed inset-0 z-[65] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div class="w-11/12 md:w-3/4 lg:w-2/3 max-h-[85vh] overflow-hidden bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl flex flex-col">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-red-800">
+            <h3 class="text-lg md:text-2xl font-bold text-red-400 flex items-center gap-2">🔥 Paris & Parties en cours</h3>
+            <button data-close="modalPariesEnCours" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
+        </div>
+        <div class="px-5 pt-3 pb-2 text-[11px] text-gray-400">Vue synthétique des engagements actifs (données fictives).</div>
+        <div id="listePariesEnCours" class="flex-1 overflow-y-auto classement-scrollbar px-5 pb-5 space-y-4"></div>
+        <div class="px-5 py-3 border-t border-red-800 flex justify-end bg-black/40">
+            <button data-close="modalPariesEnCours" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm font-semibold">Fermer</button>
+        </div>
+    </div>
+ </div>
 
 <!-- Modal Détail Pari -->
 <div id="modalPariDetails" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -230,6 +245,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const pariMiseMin = document.getElementById('pariMiseMin');
     const pariMiseMax = document.getElementById('pariMiseMax');
     const confirmerPariBtn = document.getElementById('confirmerPariBtn');
+    const btnPariesEnCours = document.getElementById('btnPariesEnCours');
+    const modalPariesEnCours = document.getElementById('modalPariesEnCours');
+    const listePariesEnCours = document.getElementById('listePariesEnCours');
 
     let pariSelectionne = null;
 
@@ -330,6 +348,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
     openBtn.addEventListener('click', () => { renderParis(); openModal(modalListe); });
 
+    // Données fictives des paris en cours (référencent éventuellement un pari de la liste + choix)
+    const pariesActifs = [
+        { ref:1, choix:'A', mise:2500 },
+        { ref:3, choix:'p', mise:1500 },
+        { ref:4, choix:'non', mise:3000 },
+        { ref:6, choix:'B', mise:5000 },
+    ];
+
+    function renderPariesEnCours(){
+        if(!pariesActifs.length){
+            listePariesEnCours.innerHTML = '<div class="text-center text-gray-500 py-10 text-sm">Aucun pari en cours.</div>';
+            return;
+        }
+        listePariesEnCours.innerHTML = pariesActifs.map(pa => {
+            const pari = paris.find(p=>p.id===pa.ref);
+            if(!pari) return '';
+            const oddsMap = computeOdds(pari);
+            const choiceObj = pari.choices.find(c=>c.id===pa.choix);
+            const cote = oddsMap[pa.choix] || 0;
+            const gainPot = pa.mise * cote;
+            return `<div class=\"border border-red-800/40 rounded-xl p-4 bg-black/40 hover:border-red-500/70 transition\">\n                <div class=\"flex flex-col md:flex-row md:items-center md:justify-between gap-3\">\n                    <div class=\"flex-1\">\n                        <div class=\"text-red-300 font-semibold\">${pari.titre}</div>\n                        <div class=\"text-[11px] text-gray-400 mt-0.5\">Choix: <span class=\"text-gray-200\">${choiceObj?choiceObj.label:pa.choix}</span></div>\n                        <div class=\"mt-1 flex flex-wrap gap-2 text-[10px]\">\n                            <span class=\"px-2 py-0.5 rounded-full bg-red-800/40 text-red-200\">Côte ${cote.toFixed(2)}</span>\n                            <span class=\"px-2 py-0.5 rounded-full bg-gray-700/40 text-gray-200\">Participants ${pari.choices.reduce((s,c)=>s+c.participants,0)}</span>\n                        </div>\n                    </div>\n                    <div class=\"grid grid-cols-2 gap-3 md:text-right text-sm font-mono\">\n                        <div class=\"bg-black/50 rounded-lg p-2 border border-red-900/40\">\n                            <div class=\"text-[10px] uppercase text-gray-400 tracking-wide\">Mise</div>\n                            <div class=\"text-red-400 font-bold\">${pa.mise.toLocaleString('fr-FR')} €</div>\n                        </div>\n                        <div class=\"bg-black/50 rounded-lg p-2 border border-red-900/40\">\n                            <div class=\"text-[10px] uppercase text-gray-400 tracking-wide\">Gain Pot.</div>\n                            <div class=\"text-green-400 font-bold\">${gainPot.toFixed(2).toLocaleString('fr-FR')} €</div>\n                        </div>\n                    </div>\n                </div>\n            </div>`;
+        }).join('');
+    }
+
+    btnPariesEnCours && btnPariesEnCours.addEventListener('click', () => {
+        renderPariesEnCours();
+        openModal(modalPariesEnCours);
+    });
+
     filterButtons.forEach(b => {
         b.addEventListener('click', () => {
             filterButtons.forEach(x=>x.classList.remove('active','bg-red-700','text-white'));
@@ -421,7 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     window.addEventListener('keydown', e => {
-        if(e.key === 'Escape') { closeModal(modalDetails); closeModal(modalListe); }
+    if(e.key === 'Escape') { closeModal(modalDetails); closeModal(modalListe); closeModal(modalPariesEnCours); }
     });
 });
 </script>
