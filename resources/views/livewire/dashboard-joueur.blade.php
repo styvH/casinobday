@@ -125,7 +125,7 @@
                 <span class="text-xl md:text-2xl mb-1 md:mb-2">🎲</span>
                 Lancer un pari
             </button>
-            <button class="px-4 md:px-6 py-3 md:py-4 bg-black hover:bg-red-800 text-white font-bold rounded-xl shadow-lg border border-red-700 transition flex flex-col items-center text-sm md:text-base">
+            <button id="openInscriptionPhysiqueBtn" class="px-4 md:px-6 py-3 md:py-4 bg-black hover:bg-red-800 text-white font-bold rounded-xl shadow-lg border border-red-700 transition flex flex-col items-center text-sm md:text-base">
                 <span class="text-xl md:text-2xl mb-1 md:mb-2">📝</span>
                 Inscription partie physique
             </button>
@@ -227,6 +227,86 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
+<!-- Modal Inscription Partie Physique -->
+<div id="modalInscriptionPhysique" class="fixed inset-0 z-[75] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
+  <div class="w-11/12 md:w-3/4 lg:w-2/3 xl:w-1/2 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[92vh] overflow-hidden flex flex-col">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-red-800">
+        <h3 class="text-lg md:text-2xl font-bold text-red-400 flex items-center gap-2">📝 Inscription Partie Physique</h3>
+        <button data-close="modalInscriptionPhysique" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
+    </div>
+    <div class="p-6 space-y-6 overflow-y-auto classement-scrollbar text-sm">
+        <p class="text-xs text-gray-400 leading-relaxed">Configurez une partie physique: nom, joueurs participants, arbitre (betMaster) si nécessaire et mise commune.</p>
+
+        <!-- Nom / Description -->
+        <div class="grid md:grid-cols-2 gap-5">
+            <div>
+                <label class="block text-xs font-semibold text-red-300 mb-2">Nom de la partie</label>
+                <input id="partieNom" type="text" placeholder="Ex: Soirée Cash NLHE" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-4 py-2" />
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-red-300 mb-2">Description (facultatif)</label>
+                <input id="partieDescription" type="text" placeholder="Ex: Table amicale 4/8" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-4 py-2" />
+            </div>
+        </div>
+
+        <!-- Joueurs Participants -->
+        <div class="space-y-3">
+            <div class="flex items-center justify-between">
+                <label class="block text-xs font-semibold text-red-300">Joueurs participants</label>
+                <button id="ajouterJoueurBtn" type="button" class="px-3 py-1 rounded bg-red-700/60 hover:bg-red-700 text-xs font-semibold">+ Ajouter</button>
+            </div>
+            <div class="relative">
+                <input id="rechercheJoueur" type="text" placeholder="Rechercher pseudo ou ID..." class="w-full bg-black/50 border border-red-800 focus:ring-1 focus:ring-red-600 rounded-lg px-3 py-2 pr-10 text-xs" />
+                <div id="resultatsRechercheJoueur" class="absolute z-10 mt-1 w-full bg-gray-900 border border-red-800 rounded-lg shadow-lg hidden max-h-52 overflow-y-auto text-xs"></div>
+            </div>
+            <div id="listeJoueursSelectionnes" class="flex flex-wrap gap-2 min-h-[2rem] p-2 bg-black/40 rounded border border-red-800/40"></div>
+            <div class="text-[10px] text-gray-400">Minimum 1 joueur. Un arbitre est obligatoire au-delà de 3 joueurs.</div>
+        </div>
+
+        <!-- Arbitre / BetMaster -->
+        <div class="space-y-2">
+            <div class="flex items-center gap-2">
+                <label class="block text-xs font-semibold text-red-300">BetMaster / Arbitre <span id="arbitreObligatoireBadge" class="hidden text-[10px] px-2 py-0.5 rounded bg-red-700/70">Obligatoire</span></label>
+            </div>
+            <div class="relative">
+                <input id="rechercheArbitre" type="text" placeholder="Rechercher arbitre (pseudo ou ID)" class="w-full bg-black/50 border border-red-800 focus:ring-1 focus:ring-red-600 rounded-lg px-3 py-2 text-xs" />
+                <div id="resultatsRechercheArbitre" class="absolute z-10 mt-1 w-full bg-gray-900 border border-red-800 rounded-lg shadow-lg hidden max-h-52 overflow-y-auto text-xs"></div>
+            </div>
+            <div id="arbitreSelectionne" class="text-xs text-gray-300"></div>
+        </div>
+
+        <!-- Mise Commune -->
+        <div class="grid md:grid-cols-3 gap-5">
+            <div class="md:col-span-1">
+                <label for="inscriptionMise" class="block text-xs font-semibold text-red-300 mb-2">Mise commune (€)</label>
+                <input id="inscriptionMise" type="number" min="1" value="1000" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-4 py-2" />
+            </div>
+            <div class="md:col-span-2 grid grid-cols-2 gap-4 text-[11px]">
+                <div class="bg-black/40 rounded-lg p-3 border border-red-800/40">
+                    <div class="text-[10px] uppercase tracking-wide text-gray-400">Mise</div>
+                    <div id="inscriptionMiseAffichage" class="text-lg font-bold text-red-400">1 000 €</div>
+                </div>
+                <div class="bg-black/40 rounded-lg p-3 border border-red-800/40">
+                    <div class="text-[10px] uppercase tracking-wide text-gray-400">Total (si validé)</div>
+                    <div id="inscriptionTotalPotentiel" class="text-lg font-bold text-emerald-400">1 000 €</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-red-900/20 border border-red-800/40 rounded-lg p-4 text-[11px] text-gray-300 leading-relaxed">
+            Cette inscription est une simulation: aucun engagement financier réel n'est pris. Les données sont fictives.
+        </div>
+    </div>
+    <div class="px-5 py-4 border-t border-red-800 bg-black/60 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div id="messageErreurInscription" class="text-[11px] text-red-400 font-semibold hidden"></div>
+        <div class="flex justify-end gap-3 w-full md:w-auto">
+            <button data-close="modalInscriptionPhysique" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs md:text-sm font-semibold">Annuler</button>
+            <button id="confirmerInscriptionPhysiqueBtn" class="px-5 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-xs md:text-sm font-bold shadow ring-1 ring-red-500/50">Valider</button>
+        </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // Gestion des modals et paris fictifs
 document.addEventListener('DOMContentLoaded', () => {
@@ -248,6 +328,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnPariesEnCours = document.getElementById('btnPariesEnCours');
     const modalPariesEnCours = document.getElementById('modalPariesEnCours');
     const listePariesEnCours = document.getElementById('listePariesEnCours');
+    const openInscriptionPhysiqueBtn = document.getElementById('openInscriptionPhysiqueBtn');
+    const modalInscriptionPhysique = document.getElementById('modalInscriptionPhysique');
+    const inscriptionMise = document.getElementById('inscriptionMise');
+    const inscriptionMiseAffichage = document.getElementById('inscriptionMiseAffichage');
+    const confirmerInscriptionPhysiqueBtn = document.getElementById('confirmerInscriptionPhysiqueBtn');
+    const partieNom = document.getElementById('partieNom');
+    const partieDescription = document.getElementById('partieDescription');
+    const ajouterJoueurBtn = document.getElementById('ajouterJoueurBtn');
+    const rechercheJoueur = document.getElementById('rechercheJoueur');
+    const resultatsRechercheJoueur = document.getElementById('resultatsRechercheJoueur');
+    const listeJoueursSelectionnes = document.getElementById('listeJoueursSelectionnes');
+    const rechercheArbitre = document.getElementById('rechercheArbitre');
+    const resultatsRechercheArbitre = document.getElementById('resultatsRechercheArbitre');
+    const arbitreSelectionne = document.getElementById('arbitreSelectionne');
+    const arbitreObligatoireBadge = document.getElementById('arbitreObligatoireBadge');
+    const inscriptionTotalPotentiel = document.getElementById('inscriptionTotalPotentiel');
+    const messageErreurInscription = document.getElementById('messageErreurInscription');
 
     let pariSelectionne = null;
 
@@ -377,6 +474,144 @@ document.addEventListener('DOMContentLoaded', () => {
         openModal(modalPariesEnCours);
     });
 
+    // Inscription partie physique
+    function updateInscriptionAffichage(){
+        if(!inscriptionMise || !inscriptionMiseAffichage) return;
+        const v = parseFloat(inscriptionMise.value)||0;
+        inscriptionMiseAffichage.textContent = v.toLocaleString('fr-FR') + ' €';
+        updateTotalPotentiel();
+    }
+    function updateTotalPotentiel(){
+        if(!inscriptionTotalPotentiel) return;
+        const mise = parseFloat(inscriptionMise.value)||0;
+        const joueurs = joueursSelectionnes.length;
+        inscriptionTotalPotentiel.textContent = (mise * joueurs).toLocaleString('fr-FR') + ' €';
+    }
+
+    // Données fictives pour recherche joueurs et arbitres
+    const poolUtilisateurs = Array.from({length: 40}).map((_,i)=>({id:i+1,pseudo:'Joueur'+(i+1)}));
+    let joueursSelectionnes = [];
+    let arbitre = null;
+
+    function renderJoueursSelectionnes(){
+        if(!listeJoueursSelectionnes) return;
+        listeJoueursSelectionnes.innerHTML = joueursSelectionnes.map(j=>`
+           <span class="flex items-center gap-1 bg-red-800/30 border border-red-700/50 px-2 py-1 rounded text-[11px]">
+             ${j.pseudo}
+             <button type="button" data-remove-joueur="${j.id}" class="text-red-300 hover:text-white font-bold ml-1">×</button>
+           </span>
+        `).join('');
+        updateArbitreRequirement();
+        updateTotalPotentiel();
+    }
+
+    function updateArbitreRequirement(){
+        if(!arbitreObligatoireBadge) return;
+        if(joueursSelectionnes.length > 3){
+            arbitreObligatoireBadge.classList.remove('hidden');
+        } else {
+            arbitreObligatoireBadge.classList.add('hidden');
+        }
+    }
+
+    function filtrerUtilisateurs(terme){
+        const t = terme.toLowerCase();
+        return poolUtilisateurs.filter(u=> u.pseudo.toLowerCase().includes(t) || (''+u.id).includes(t)).slice(0,8);
+    }
+
+    function afficherResultatsRecherche(inputEl, resultsEl, onSelect){
+        if(!inputEl || !resultsEl) return;
+        const terme = inputEl.value.trim();
+        if(!terme){ resultsEl.classList.add('hidden'); resultsEl.innerHTML=''; return; }
+        const matches = filtrerUtilisateurs(terme);
+        if(!matches.length){ resultsEl.innerHTML='<div class="px-3 py-2 text-gray-500">Aucun résultat</div>'; resultsEl.classList.remove('hidden'); return; }
+        resultsEl.innerHTML = matches.map(m=>`<button type="button" data-select-id="${m.id}" class="w-full text-left px-3 py-2 hover:bg-red-800/40 flex justify-between items-center"> <span>${m.pseudo}</span><span class="text-[10px] text-gray-400">#${m.id}</span></button>`).join('');
+        resultsEl.classList.remove('hidden');
+        resultsEl.querySelectorAll('[data-select-id]').forEach(btn=>{
+            btn.addEventListener('click',()=>{
+                const id=parseInt(btn.getAttribute('data-select-id'));
+                const user=poolUtilisateurs.find(u=>u.id===id);
+                if(user) onSelect(user);
+                resultsEl.classList.add('hidden');
+            });
+        })
+    }
+
+    rechercheJoueur && rechercheJoueur.addEventListener('input', ()=>{
+        afficherResultatsRecherche(rechercheJoueur, resultatsRechercheJoueur, (user)=>{
+            if(!joueursSelectionnes.some(j=>j.id===user.id)){
+                joueursSelectionnes.push(user);
+                renderJoueursSelectionnes();
+            }
+            rechercheJoueur.value='';
+        });
+    });
+
+    rechercheArbitre && rechercheArbitre.addEventListener('input', ()=>{
+        afficherResultatsRecherche(rechercheArbitre, resultatsRechercheArbitre, (user)=>{
+            arbitre = user;
+            arbitreSelectionne.innerHTML = `<div class=\"flex items-center gap-2 bg-emerald-800/20 border border-emerald-600/40 px-3 py-2 rounded\"><span class=\"text-emerald-300 font-semibold\">${user.pseudo}</span><button type=\"button\" id=\"retirerArbitreBtn\" class=\"text-emerald-300 hover:text-white font-bold\">×</button></div>`;
+            rechercheArbitre.value='';
+            resultatsRechercheArbitre.classList.add('hidden');
+            document.getElementById('retirerArbitreBtn').addEventListener('click',()=>{ arbitre=null; arbitreSelectionne.innerHTML=''; });
+        });
+    });
+
+    ajouterJoueurBtn && ajouterJoueurBtn.addEventListener('click', ()=>{
+        // Ajoute un joueur fictif aléatoire différent si possible
+        const restants = poolUtilisateurs.filter(u=> !joueursSelectionnes.some(j=>j.id===u.id));
+        if(restants.length){
+            const pick = restants[Math.floor(Math.random()*restants.length)];
+            joueursSelectionnes.push(pick);
+            renderJoueursSelectionnes();
+        }
+    });
+
+    listeJoueursSelectionnes && listeJoueursSelectionnes.addEventListener('click', (e)=>{
+        const btn = e.target.closest('[data-remove-joueur]');
+        if(btn){
+            const id = parseInt(btn.getAttribute('data-remove-joueur'));
+            joueursSelectionnes = joueursSelectionnes.filter(j=>j.id!==id);
+            renderJoueursSelectionnes();
+        }
+    });
+
+    function validerInscriptionPartie(){
+        messageErreurInscription.classList.add('hidden');
+        const nom = (partieNom?.value||'').trim();
+        if(!nom){ return afficherErreur('Nom de la partie requis'); }
+        if(joueursSelectionnes.length===0){ return afficherErreur('Au moins un joueur'); }
+        if(joueursSelectionnes.length>3 && !arbitre){ return afficherErreur('Arbitre obligatoire (>3 joueurs)'); }
+        const mise = parseFloat(inscriptionMise.value)||0;
+        if(mise<=0){ return afficherErreur('Mise commune invalide'); }
+        const payload = {
+            nom,
+            description: (partieDescription?.value||'').trim(),
+            joueurs: joueursSelectionnes,
+            arbitre: arbitre,
+            mise,
+            totalPotentiel: mise * joueursSelectionnes.length
+        };
+        alert('(Démo) Partie créée:\n'+JSON.stringify(payload,null,2));
+        closeModal(modalInscriptionPhysique);
+    }
+    function afficherErreur(msg){
+        messageErreurInscription.textContent = msg;
+        messageErreurInscription.classList.remove('hidden');
+    }
+
+    confirmerInscriptionPhysiqueBtn && confirmerInscriptionPhysiqueBtn.addEventListener('click', validerInscriptionPartie);
+    inscriptionMise && inscriptionMise.addEventListener('input', updateInscriptionAffichage);
+    openInscriptionPhysiqueBtn && openInscriptionPhysiqueBtn.addEventListener('click', () => {
+        updateInscriptionAffichage();
+        openModal(modalInscriptionPhysique);
+    });
+    confirmerInscriptionPhysiqueBtn && confirmerInscriptionPhysiqueBtn.addEventListener('click', () => {
+        const v = parseFloat(inscriptionMise.value)||0;
+        alert('(Démo) Proposition enregistrée: ' + v.toLocaleString('fr-FR') + ' €');
+        closeModal(modalInscriptionPhysique);
+    });
+
     filterButtons.forEach(b => {
         b.addEventListener('click', () => {
             filterButtons.forEach(x=>x.classList.remove('active','bg-red-700','text-white'));
@@ -468,7 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     window.addEventListener('keydown', e => {
-    if(e.key === 'Escape') { closeModal(modalDetails); closeModal(modalListe); closeModal(modalPariesEnCours); }
+    if(e.key === 'Escape') { closeModal(modalDetails); closeModal(modalListe); closeModal(modalPariesEnCours); closeModal(modalInscriptionPhysique); }
     });
 });
 </script>
