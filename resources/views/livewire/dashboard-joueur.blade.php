@@ -129,7 +129,7 @@
                 <span class="text-xl md:text-2xl mb-1 md:mb-2">📝</span>
                 Inscription partie physique
             </button>
-            <button class="px-4 md:px-6 py-3 md:py-4 bg-red-900 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition flex flex-col items-center text-sm md:text-base">
+            <button id="openHistoryBtn" class="px-4 md:px-6 py-3 md:py-4 bg-red-900 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition flex flex-col items-center text-sm md:text-base">
                 <span class="text-xl md:text-2xl mb-1 md:mb-2">📜</span>
                 Historique
             </button>
@@ -389,6 +389,28 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
+<!-- Modal Historique -->
+<div id="modalHistorique" class="fixed inset-0 z-[55] hidden items-center justify-center bg-black/75 backdrop-blur-sm">
+    <div class="w-11/12 md:w-4/5 lg:w-2/3 xl:w-1/2 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-red-800">
+                <h3 class="text-lg md:text-2xl font-bold text-red-400 flex items-center gap-2">📜 Historique</h3>
+                <button data-close="modalHistorique" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
+        </div>
+        <div class="px-5 pt-4 pb-2 flex flex-wrap gap-2 text-[11px]" id="historyFilters">
+                <button data-h-filter="tous" class="hist-filter active bg-red-700 hover:bg-red-800 text-white px-3 py-1 rounded-full">Tous</button>
+                <button data-h-filter="pari" class="hist-filter bg-gray-800 hover:bg-gray-700 text-red-300 px-3 py-1 rounded-full">Paris</button>
+                <button data-h-filter="blackjack" class="hist-filter bg-gray-800 hover:bg-gray-700 text-red-300 px-3 py-1 rounded-full">Blackjack</button>
+                <button data-h-filter="transaction" class="hist-filter bg-gray-800 hover:bg-gray-700 text-red-300 px-3 py-1 rounded-full">Transactions</button>
+        </div>
+        <div class="px-5 pb-3 text-[10px] md:text-xs text-gray-400 italic">Dernières activités simulées (front uniquement).</div>
+        <div id="historyList" class="flex-1 overflow-y-auto classement-scrollbar px-5 pb-4 divide-y divide-red-800/30 text-sm"></div>
+        <div class="px-5 py-3 border-t border-red-800 bg-black/60 flex items-center justify-between">
+                <button id="historyShowMoreBtn" class="px-4 py-1.5 rounded-lg bg-black/70 border border-red-700 text-red-300 hover:bg-red-800/40 hover:text-white text-xs font-semibold">Afficher plus</button>
+                <button data-close="modalHistorique" class="px-4 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs font-semibold">Fermer</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // Gestion des modals et paris fictifs
 document.addEventListener('DOMContentLoaded', () => {
@@ -445,6 +467,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const blackjackBetDisplay = document.getElementById('blackjackBetDisplay');
     const blackjackWinDisplay = document.getElementById('blackjackWinDisplay');
     const blackjackKeepBet = document.getElementById('blackjackKeepBet');
+    // Historique refs
+    const openHistoryBtn = document.getElementById('openHistoryBtn');
+    const modalHistorique = document.getElementById('modalHistorique');
+    const historyList = document.getElementById('historyList');
+    const historyShowMoreBtn = document.getElementById('historyShowMoreBtn');
+    const historyFilters = document.getElementById('historyFilters');
 
     let pariSelectionne = null;
 
@@ -600,6 +628,115 @@ document.addEventListener('DOMContentLoaded', () => {
     // bjFinished true = aucune main en cours ou main terminée => fermeture autorisée
     let bjFinished = true;
     const blackjackCloseBtn = document.getElementById('blackjackCloseBtn');
+    // Historique state
+    const HISTORY_PAGE_SIZE = 10;
+    let historyVisibleCount = HISTORY_PAGE_SIZE;
+    let historyCurrentFilter = 'tous';
+    // Mock history dataset (newest first)
+    const mockHistory = (()=>{
+        const types = ['pari','blackjack','transaction'];
+        const icons = { pari:'🎲', blackjack:'🃏', transaction:'💰' };
+        const arr = [];
+        const now = Date.now();
+        for(let i=0;i<36;i++){
+            const type = types[i%types.length];
+            let amount = 0; let desc='';
+            if(type==='pari'){
+                amount = (Math.random()>0.5?1:-1) * (500+Math.floor(Math.random()*4500));
+                desc = 'Pari '+(amount>0?'gagné':'perdu')+' sur événement #'+(100+i);
+            } else if(type==='blackjack'){
+                amount = (Math.random()>0.55?1:-1) * (200+Math.floor(Math.random()*3000));
+                desc = 'Blackjack '+(amount>0?'victoire':'défaite');
+            } else {
+                amount = (Math.random()>0.5?1:-1) * (100+Math.floor(Math.random()*2000));
+                desc = amount>0? 'Crédit bonus': 'Achat jetons';
+            }
+            arr.push({
+                id:i+1,
+                type,
+                icon: icons[type],
+                amount,
+                desc,
+                ts: now - i* 1000*60* (5+Math.random()*20)
+            });
+        }
+        return arr; // Already newest first by construction
+    })();
+
+    function formatDate(ts){
+        const d = new Date(ts);
+        return d.toLocaleString('fr-FR', {hour12:false});
+    }
+    function formatAmount(a){
+        const sign = a>0?'+':'';
+        return sign + a.toLocaleString('fr-FR') + ' €';
+    }
+    function historyFiltered(){
+        if(historyCurrentFilter==='tous') return mockHistory;
+        return mockHistory.filter(h=>h.type===historyCurrentFilter);
+    }
+    function renderHistory(){
+        if(!historyList) return;
+        const data = historyFiltered();
+        const slice = data.slice(0, historyVisibleCount);
+        if(!slice.length){
+            historyList.innerHTML = '<div class="py-10 text-center text-gray-500 text-sm">Aucun élément.</div>';
+        } else {
+            historyList.innerHTML = slice.map(h=>{
+                const amtCls = h.amount>0? 'text-green-400':'text-red-400';
+                return `<div class="py-3 flex items-start gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-red-800/30 border border-red-700/40 flex items-center justify-center text-base">${h.icon}</div>
+                    <div class="flex-1">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-1">
+                            <div class="font-medium text-red-200">${h.desc}</div>
+                            <div class="text-[11px] text-gray-500">${formatDate(h.ts)}</div>
+                        </div>
+                        <div class="mt-1 text-xs uppercase tracking-wide text-gray-500">${h.type}</div>
+                    </div>
+                    <div class="text-sm font-mono ${amtCls}">${formatAmount(h.amount)}</div>
+                </div>`;
+            }).join('');
+        }
+        // ShowMore visibility
+        if(historyShowMoreBtn){
+            if(historyVisibleCount >= data.length){
+                historyShowMoreBtn.classList.add('hidden');
+            } else {
+                historyShowMoreBtn.classList.remove('hidden');
+            }
+        }
+    }
+    function resetHistory(){
+        historyVisibleCount = HISTORY_PAGE_SIZE;
+        renderHistory();
+    }
+    openHistoryBtn && openHistoryBtn.addEventListener('click', () => {
+        historyCurrentFilter = 'tous';
+        document.querySelectorAll('.hist-filter').forEach(f=>{
+            f.classList.remove('active','bg-red-700','text-white');
+            f.classList.add('bg-gray-800','text-red-300');
+        });
+        const first = document.querySelector('[data-h-filter="tous"]');
+        if(first){ first.classList.add('active','bg-red-700','text-white'); first.classList.remove('bg-gray-800','text-red-300'); }
+        resetHistory();
+        openModal(modalHistorique);
+    });
+    historyFilters && historyFilters.addEventListener('click', (e)=>{
+        const btn = e.target.closest('[data-h-filter]');
+        if(!btn) return;
+        historyCurrentFilter = btn.getAttribute('data-h-filter');
+        document.querySelectorAll('.hist-filter').forEach(f=>{
+            f.classList.remove('active','bg-red-700','text-white');
+            f.classList.add('bg-gray-800','text-red-300');
+        });
+        btn.classList.add('active','bg-red-700','text-white');
+        btn.classList.remove('bg-gray-800','text-red-300');
+        resetHistory();
+    });
+    historyShowMoreBtn && historyShowMoreBtn.addEventListener('click', () => {
+        historyVisibleCount += HISTORY_PAGE_SIZE;
+        renderHistory();
+    });
 
     function bjCreateDeck(){
         const suits = ['♠','♥','♦','♣'];
@@ -981,7 +1118,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
     window.addEventListener('keydown', e => {
-    if(e.key === 'Escape') { closeModal(modalDetails); closeModal(modalListe); closeModal(modalPariesEnCours); closeModal(modalInscriptionPhysique); }
+    if(e.key === 'Escape') { closeModal(modalDetails); closeModal(modalListe); closeModal(modalPariesEnCours); closeModal(modalInscriptionPhysique); if(bjFinished) closeModal(modalBlackjack); closeModal(modalHistorique); }
     });
 });
 </script>
