@@ -8,6 +8,11 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
+/**
+ * @property-read UserAccount|null $account
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Transaction> $transactions
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, GameSession> $gameSessions
+ */
 class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
@@ -44,4 +49,19 @@ class User extends Authenticatable
         'password' => 'hashed',
         'is_admin' => 'boolean',
     ];
+
+    public function account()
+    {
+        return $this->hasOne(UserAccount::class);
+    }
+
+    public function transactions()
+    {
+        return $this->hasMany(Transaction::class)->latest();
+    }
+
+    public function gameSessions()
+    {
+        return $this->hasMany(GameSession::class);
+    }
 }

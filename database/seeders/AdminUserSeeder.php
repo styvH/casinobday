@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class AdminUserSeeder extends Seeder
 {
@@ -21,11 +22,28 @@ class AdminUserSeeder extends Seeder
         // Avoid duplicate creation
         $user = User::where('email', $email)->first();
         if (!$user) {
-            User::create([
+            $user = User::create([
                 'name' => 'Admin',
                 'email' => $email,
                 'password' => Hash::make($password),
                 'is_admin' => true,
+            ]);
+            // Create related account with default balance 10 000 € (1 000 000 cents)
+            DB::table('user_accounts')->insert([
+                'user_id' => $user->id,
+                'balance_cents' => 1000000,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            DB::table('transactions')->insert([
+                'user_id' => $user->id,
+                'type' => 'initial_credit',
+                'amount_cents' => 1000000,
+                'balance_after_cents' => 1000000,
+                'reference' => 'SEED-INIT',
+                'meta' => json_encode(['note' => 'Solde initial']),
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
     }

@@ -21,12 +21,7 @@
     opacity: 1;
 }
 </style>
-@php
-    $solde = 12500; // fictif
-    $pariesEnCours = 3;
-    $totalMise = 4500;
-    $gainsFuturs = 9800;
-@endphp
+@php /* Les anciennes valeurs fictives ont été remplacées par des propriétés Livewire dynamiques */ @endphp
 
 <div class="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-red-900 via-black to-red-700 text-white">
 @php
@@ -109,7 +104,7 @@
         <div class="flex flex-col items-center mb-6 md:mb-8">
             <div class="text-xl md:text-2xl font-semibold mb-1 md:mb-2">Solde du compte</div>
             <div class="flex items-center gap-3 mb-3 md:mb-4">
-                <div class="text-3xl md:text-5xl font-extrabold text-red-400">{{ number_format($solde, 0, ',', ' ') }} €</div>
+                <div class="text-3xl md:text-5xl font-extrabold text-red-400">{{ number_format($balance, 0, ',', ' ') }} €</div>
                 <button id="openDonationBtn" class="group relative text-xs md:text-sm px-3 py-2 md:py-2 bg-gradient-to-r from-red-800 to-red-600 hover:from-red-700 hover:to-red-500 rounded-lg font-semibold shadow ring-1 ring-red-500/60 hover:ring-red-300 transition overflow-hidden">
                     <span class="relative z-10 flex items-center gap-1">
                         💝 <span>Faire un don</span>
