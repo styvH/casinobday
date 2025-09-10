@@ -95,7 +95,11 @@
             </details>
         </div>
     </div>
-    <main class="w-full max-w-3xl bg-black bg-opacity-80 rounded-xl shadow-lg p-4 md:p-8 border-4 border-red-800 mt-20 md:mt-0">
+    <main class="relative w-full max-w-3xl bg-black bg-opacity-80 rounded-xl shadow-lg p-4 md:p-8 border-4 border-red-800 mt-20 md:mt-0">
+        <!-- Bouton Paramètres icône seule -->
+        <button id="openSettingsBtn" aria-label="Paramètres" class="absolute top-2 right-2 md:top-3 md:right-3 w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-lg bg-black/60 border border-red-700 text-red-300 hover:text-white hover:border-red-500 hover:bg-red-800/40 transition shadow">
+            ⚙️
+        </button>
         <h2 class="text-2xl md:text-4xl font-bold mb-4 md:mb-6 text-center text-red-500">Dashboard Joueur</h2>
         <div class="flex flex-col items-center mb-6 md:mb-8">
             <div class="text-xl md:text-2xl font-semibold mb-1 md:mb-2">Solde du compte</div>
@@ -123,7 +127,7 @@
                 </div>
             </div>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8 mb-6 md:mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8 mb-6 md:mb-8">
             <button id="openPariModalBtn" class="px-4 md:px-6 py-3 md:py-4 bg-red-700 hover:bg-red-900 text-white font-bold rounded-xl shadow-lg transition flex flex-col items-center text-sm md:text-base">
                 <span class="text-xl md:text-2xl mb-1 md:mb-2">🎲</span>
                 Lancer un pari
@@ -442,6 +446,63 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
+<!-- Modal Paramètres -->
+<div id="modalSettings" class="fixed inset-0 z-[59] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
+  <div class="w-11/12 md:w-2/3 lg:w-1/2 xl:w-2/5 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[88vh] overflow-hidden flex flex-col">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-red-800">
+        <h3 class="text-lg md:text-2xl font-bold text-red-400 flex items-center gap-2">⚙️ Paramètres</h3>
+        <button data-close="modalSettings" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
+    </div>
+    <div class="p-6 space-y-6 overflow-y-auto classement-scrollbar text-sm">
+        <p class="text-xs text-gray-400 leading-relaxed">Modifiez votre pseudo ou votre mot de passe. (Front-end démo uniquement.)</p>
+
+        <div class="space-y-4">
+            <label class="flex items-center gap-2 text-xs font-semibold text-red-300 select-none">
+                <input id="settingsChangePseudo" type="checkbox" class="h-4 w-4 rounded border-red-700 bg-black/60 text-red-600 focus:ring-red-600" />
+                <span>Changer de pseudo</span>
+            </label>
+            <div id="settingsPseudoFields" class="hidden bg-black/40 border border-red-800/40 rounded-lg p-4 space-y-3">
+                <div>
+                    <label class="block text-[11px] font-semibold text-red-300 mb-1">Nouveau pseudo</label>
+                    <input id="settingsNewPseudo" type="text" placeholder="Nouveau pseudo" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2 text-sm" />
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <label class="flex items-center gap-2 text-xs font-semibold text-red-300 select-none">
+                <input id="settingsChangePassword" type="checkbox" class="h-4 w-4 rounded border-red-700 bg-black/60 text-red-600 focus:ring-red-600" />
+                <span>Changer le mot de passe</span>
+            </label>
+            <div id="settingsPasswordFields" class="hidden bg-black/40 border border-red-800/40 rounded-lg p-4 space-y-4">
+                <div>
+                    <label class="block text-[11px] font-semibold text-red-300 mb-1">Mot de passe actuel</label>
+                    <input id="settingsCurrentPassword" type="password" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-red-300 mb-1">Nouveau mot de passe</label>
+                        <input id="settingsNewPassword" type="password" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-red-300 mb-1">Confirmer mot de passe</label>
+                        <input id="settingsConfirmPassword" type="password" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2 text-sm" />
+                    </div>
+                </div>
+                <p class="text-[10px] text-gray-500">Longueur minimale recommandée: 6 caractères.</p>
+            </div>
+        </div>
+
+        <div id="settingsError" class="text-[11px] text-red-400 font-semibold hidden"></div>
+        <div id="settingsSuccess" class="text-[11px] text-emerald-400 font-semibold hidden"></div>
+    </div>
+    <div class="px-5 py-4 border-t border-red-800 bg-black/60 flex justify-end gap-3">
+        <button data-close="modalSettings" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs md:text-sm font-semibold">Fermer</button>
+        <button id="settingsSaveBtn" class="px-5 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-xs md:text-sm font-bold shadow ring-1 ring-red-500/50">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Historique -->
 <div id="modalHistorique" class="fixed inset-0 z-[55] hidden items-center justify-center bg-black/75 backdrop-blur-sm">
     <div class="w-11/12 md:w-4/5 lg:w-2/3 xl:w-1/2 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -526,6 +587,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyList = document.getElementById('historyList');
     const historyShowMoreBtn = document.getElementById('historyShowMoreBtn');
     const historyFilters = document.getElementById('historyFilters');
+    // Settings refs
+    const openSettingsBtn = document.getElementById('openSettingsBtn');
+    const modalSettings = document.getElementById('modalSettings');
+    const settingsChangePseudo = document.getElementById('settingsChangePseudo');
+    const settingsPseudoFields = document.getElementById('settingsPseudoFields');
+    const settingsNewPseudo = document.getElementById('settingsNewPseudo');
+    const settingsChangePassword = document.getElementById('settingsChangePassword');
+    const settingsPasswordFields = document.getElementById('settingsPasswordFields');
+    const settingsCurrentPassword = document.getElementById('settingsCurrentPassword');
+    const settingsNewPassword = document.getElementById('settingsNewPassword');
+    const settingsConfirmPassword = document.getElementById('settingsConfirmPassword');
+    const settingsSaveBtn = document.getElementById('settingsSaveBtn');
+    const settingsError = document.getElementById('settingsError');
+    const settingsSuccess = document.getElementById('settingsSuccess');
 
     let pariSelectionne = null;
 
@@ -789,6 +864,58 @@ document.addEventListener('DOMContentLoaded', () => {
     historyShowMoreBtn && historyShowMoreBtn.addEventListener('click', () => {
         historyVisibleCount += HISTORY_PAGE_SIZE;
         renderHistory();
+    });
+
+    // Settings modal logic
+    function clearSettingsMessages(){
+        settingsError && settingsError.classList.add('hidden');
+        settingsSuccess && settingsSuccess.classList.add('hidden');
+    }
+    function setSettingsError(msg){ if(!settingsError) return; settingsError.textContent = msg; settingsError.classList.remove('hidden'); settingsSuccess&&settingsSuccess.classList.add('hidden'); }
+    function setSettingsSuccess(msg){ if(!settingsSuccess) return; settingsSuccess.textContent = msg; settingsSuccess.classList.remove('hidden'); settingsError&&settingsError.classList.add('hidden'); }
+
+    function toggleSettingsFields(){
+        if(settingsPseudoFields){ settingsPseudoFields.classList.toggle('hidden', !settingsChangePseudo.checked); }
+        if(settingsPasswordFields){ settingsPasswordFields.classList.toggle('hidden', !settingsChangePassword.checked); }
+    }
+    settingsChangePseudo && settingsChangePseudo.addEventListener('change', toggleSettingsFields);
+    settingsChangePassword && settingsChangePassword.addEventListener('change', toggleSettingsFields);
+
+    openSettingsBtn && openSettingsBtn.addEventListener('click', () => {
+        // reset form
+        clearSettingsMessages();
+        if(settingsChangePseudo) settingsChangePseudo.checked = false;
+        if(settingsChangePassword) settingsChangePassword.checked = false;
+        if(settingsNewPseudo) settingsNewPseudo.value='';
+        if(settingsCurrentPassword) settingsCurrentPassword.value='';
+        if(settingsNewPassword) settingsNewPassword.value='';
+        if(settingsConfirmPassword) settingsConfirmPassword.value='';
+        toggleSettingsFields();
+        openModal(modalSettings);
+    });
+
+    settingsSaveBtn && settingsSaveBtn.addEventListener('click', () => {
+        clearSettingsMessages();
+        const changePseudo = settingsChangePseudo && settingsChangePseudo.checked;
+        const changePwd = settingsChangePassword && settingsChangePassword.checked;
+        if(!changePseudo && !changePwd){ setSettingsError('Sélectionnez une option à modifier'); return; }
+        if(changePseudo){
+            const pseudo = (settingsNewPseudo?.value||'').trim();
+            if(!pseudo){ setSettingsError('Nouveau pseudo requis'); return; }
+            if(pseudo.length < 3){ setSettingsError('Pseudo trop court'); return; }
+        }
+        if(changePwd){
+            const cur = settingsCurrentPassword?.value||'';
+            const np = settingsNewPassword?.value||'';
+            const cf = settingsConfirmPassword?.value||'';
+            if(!cur){ setSettingsError('Mot de passe actuel requis'); return; }
+            if(np.length < 6){ setSettingsError('Nouveau mot de passe trop court'); return; }
+            if(np !== cf){ setSettingsError('Confirmation différente'); return; }
+        }
+        // Simulate save (front only)
+        setTimeout(()=>{
+            setSettingsSuccess('Paramètres mis à jour (simulation)');
+        },400);
     });
 
     // Donation modal logic
