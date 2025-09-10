@@ -357,10 +357,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
             <div class="bg-black/50 border border-red-800/40 rounded-xl p-4 space-y-3">
-                <div class="flex flex-wrap gap-3">
+                <div class="flex flex-wrap items-center gap-3">
                     <button id="blackjackHitBtn" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-xs md:text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">Tirer</button>
                     <button id="blackjackStandBtn" class="px-4 py-2 rounded-lg bg-black/70 border border-red-700 hover:bg-red-800 text-xs md:text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">Rester</button>
                     <button id="blackjackRestartBtn" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs md:text-sm font-semibold hidden">Rejouer</button>
+                    <label class="flex items-center gap-2 text-[11px] text-gray-400 ml-2 select-none">
+                        <input id="blackjackKeepBet" type="checkbox" class="h-4 w-4 rounded border-red-700 bg-black/60 text-red-600 focus:ring-red-600" />
+                        <span>Conserver mise</span>
+                    </label>
                 </div>
                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-[11px]">
                     <div id="blackjackStatus" class="font-semibold text-red-300">Partie en cours...</div>
@@ -440,6 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const blackjackRestartBtn = document.getElementById('blackjackRestartBtn');
     const blackjackBetDisplay = document.getElementById('blackjackBetDisplay');
     const blackjackWinDisplay = document.getElementById('blackjackWinDisplay');
+    const blackjackKeepBet = document.getElementById('blackjackKeepBet');
 
     let pariSelectionne = null;
 
@@ -725,7 +730,21 @@ document.addEventListener('DOMContentLoaded', () => {
         bjFinish();
     });
     blackjackRestartBtn && blackjackRestartBtn.addEventListener('click', () => {
-        bjStart();
+        if(blackjackKeepBet && blackjackKeepBet.checked){
+            // Relancer immédiatement avec même mise
+            blackjackStartSection.classList.add('hidden');
+            blackjackGameSection.classList.remove('hidden');
+            blackjackBetDisplay.textContent = bjBet.toLocaleString('fr-FR') + ' €';
+            blackjackWinDisplay.textContent = '0 €';
+            bjStart();
+        } else {
+            // Revenir à l'écran de mise pour ressaisir un montant
+            bjFinished = true;
+            blackjackGameSection.classList.add('hidden');
+            blackjackStartSection.classList.remove('hidden');
+            blackjackBetInput.value = bjBet.toString();
+            blackjackBetInput.focus();
+        }
     });
 
     function renderJoueursSelectionnes(){
