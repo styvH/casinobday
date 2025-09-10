@@ -316,7 +316,7 @@ document.addEventListener('DOMContentLoaded', function() {
   <div class="w-11/12 md:w-3/4 lg:w-2/3 xl:w-1/2 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[95vh] overflow-hidden flex flex-col">
     <div class="flex items-center justify-between px-5 py-4 border-b border-red-800">
         <h3 class="text-lg md:text-2xl font-bold text-red-400 flex items-center gap-2">🃏 Blackjack</h3>
-        <button data-close="modalBlackjack" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
+    <button id="blackjackCloseBtn" data-close="modalBlackjack" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
     </div>
     <div class="flex-1 p-5 overflow-y-auto classement-scrollbar text-sm space-y-6" id="blackjackContent">
         <!-- Section mise initiale -->
@@ -597,7 +597,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let bjPlayer = [];
     let bjDealer = [];
     let bjBet = 0;
-    let bjFinished = false;
+    // bjFinished true = aucune main en cours ou main terminée => fermeture autorisée
+    let bjFinished = true;
+    const blackjackCloseBtn = document.getElementById('blackjackCloseBtn');
 
     function bjCreateDeck(){
         const suits = ['♠','♥','♦','♣'];
@@ -652,6 +654,11 @@ document.addEventListener('DOMContentLoaded', () => {
         blackjackHitBtn.disabled = false;
         blackjackStandBtn.disabled = false;
         blackjackRestartBtn.classList.add('hidden');
+        // Verrouiller fermeture
+        if(blackjackCloseBtn){
+            blackjackCloseBtn.classList.add('opacity-40','cursor-not-allowed','pointer-events-none');
+            blackjackCloseBtn.setAttribute('aria-disabled','true');
+        }
         bjRenderHands(false);
         bjCheckImmediate();
     }
@@ -667,6 +674,11 @@ document.addEventListener('DOMContentLoaded', () => {
         blackjackHitBtn.disabled = true;
         blackjackStandBtn.disabled = true;
         blackjackRestartBtn.classList.remove('hidden');
+        // Déverrouiller fermeture
+        if(blackjackCloseBtn){
+            blackjackCloseBtn.classList.remove('opacity-40','cursor-not-allowed','pointer-events-none');
+            blackjackCloseBtn.removeAttribute('aria-disabled');
+        }
         bjRenderHands(true);
         const pv = bjHandValue(bjPlayer);
         const dv = bjHandValue(bjDealer);
@@ -951,8 +963,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fermeture modals générique
     document.querySelectorAll('[data-close]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const target = document.getElementById(btn.getAttribute('data-close'));
+        btn.addEventListener('click', (e) => {
+            const targetId = btn.getAttribute('data-close');
+            if(targetId === 'modalBlackjack' && !bjFinished){
+                // Indication visuelle
+                if(blackjackStatus){
+                    const prev = blackjackStatus.textContent;
+                    blackjackStatus.textContent = 'Terminez la main avant de fermer';
+                    blackjackStatus.classList.add('text-yellow-300');
+                    setTimeout(()=>{ blackjackStatus.textContent = prev; blackjackStatus.classList.remove('text-yellow-300'); }, 1500);
+                }
+                e.preventDefault();
+                return;
+            }
+            const target = document.getElementById(targetId);
             if(target) closeModal(target);
         });
     });
