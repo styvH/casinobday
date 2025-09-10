@@ -149,6 +149,13 @@
             <p class="text-gray-400 text-sm md:text-base">Engagez la partie et montez au classement.</p>
         </div>
     </main>
+        @php
+            $adminPlayersPayload = [
+                'currentUserId' => auth()->id(),
+                'players' => ($allPlayers ?? collect())->map(fn($u)=>['id'=>$u->id,'name'=>$u->name])->values(),
+            ];
+        @endphp
+        <script id="adminPlayersData" type="application/json">{!! json_encode($adminPlayersPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const btn = document.getElementById('toggleClassementMobile');
@@ -573,16 +580,47 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                     <div class="md:col-span-1" x-data>
                         <label class="block text-[11px] font-semibold text-red-300 mb-1">Joueurs (si sélection)</label>
-                        <select wire:model="injectionSelected" multiple size="4" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-red-600">
-                            @foreach(($allPlayers ?? collect()) as $p)
-                                <option value="{{ $p->id }}">{{ $p->name }}</option>
-                            @endforeach
-                        </select>
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] text-gray-400">Sélectionnés</span>
+                                <button type="button" class="text-[10px] px-2 py-0.5 rounded bg-gray-700/60 hover:bg-gray-600" onclick="window.clearInjectionSelection && window.clearInjectionSelection()">Vider</button>
+                            </div>
+                            <div id="injectionSelectedTags" class="flex flex-wrap gap-1 min-h-[2rem] p-2 bg-black/40 rounded border border-red-800/40 text-[11px]"></div>
+                            <div class="relative">
+                                <input id="injectionSearch" type="text" placeholder="Rechercher joueur..." class="w-full bg-black/50 border border-red-800 focus:ring-1 focus:ring-red-600 rounded-lg px-2 py-1.5 text-[11px]" autocomplete="off" />
+                                <div id="injectionResults" class="absolute z-10 mt-1 w-full bg-gray-900 border border-red-800 rounded-lg shadow-lg hidden max-h-48 overflow-y-auto text-[11px]"></div>
+                            </div>
+                        </div>
                         @error('injectionSelected') <span class="text-[10px] text-red-400">{{ $message }}</span> @enderror
                     </div>
                 </div>
                 <div class="flex justify-end">
                     <button type="submit" class="px-4 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-xs font-semibold ring-1 ring-red-500/50">Injecter</button>
+                </div>
+            </form>
+        </div>
+
+        <div class="space-y-4">
+            <h4 class="text-sm font-semibold text-red-300 flex items-center gap-2">🗑️ Supprimer un joueur</h4>
+            <form wire:submit.prevent="adminDeletePlayer" class="space-y-4">
+                <div class="grid md:grid-cols-4 gap-4 items-end">
+                    <div class="md:col-span-3">
+                        <label class="block text-[11px] font-semibold text-red-300 mb-1">Joueur à supprimer</label>
+                        <select wire:model="deletePlayerId" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-600">
+                            <option value="">-- Sélectionner --</option>
+                            @php $currentId = auth()->id(); @endphp
+                            @foreach(($allPlayers ?? collect()) as $p)
+                                @if($p->id !== $currentId)
+                                    <option value="{{ $p->id }}">#{{ $p->id }} - {{ $p->name }}</option>
+                                @endif
+                            @endforeach
+                        </select>
+                        @error('deletePlayerId') <span class="text-[10px] text-red-400">{{ $message }}</span> @enderror
+                        <p class="text-[10px] text-gray-500 mt-1">Action irréversible. Le joueur, son compte, ses transactions et sessions seront supprimés.</p>
+                    </div>
+                    <div class="md:col-span-1 flex justify-end">
+                        <button type="submit" class="px-4 py-2 mt-5 rounded-lg bg-red-800 hover:bg-red-900 text-xs font-semibold ring-1 ring-red-600/60">Supprimer</button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -722,6 +760,69 @@ document.addEventListener('DOMContentLoaded', () => {
     const settingsSaveBtn = document.getElementById('settingsSaveBtn');
     const settingsError = document.getElementById('settingsError');
     const settingsSuccess = document.getElementById('settingsSuccess');
+    // Admin injection selection UI
+    const injectionScopeSelect = document.querySelector('[wire\\:model="injectionScope"]');
+    const injectionSearch = document.getElementById('injectionSearch');
+    const injectionResults = document.getElementById('injectionResults');
+    const injectionSelectedTags = document.getElementById('injectionSelectedTags');
+    const adminPlayersEl = document.getElementById('adminPlayersData');
+    let __adminMeta = { currentUserId:0, players:[] };
+    if(adminPlayersEl){
+        try { __adminMeta = JSON.parse(adminPlayersEl.textContent || '{}'); } catch(e) { console.warn('Admin players JSON parse error', e); }
+    }
+    const injectionPool = Array.isArray(__adminMeta.players) ? __adminMeta.players : [];
+    const currentUserId = parseInt(__adminMeta.currentUserId||0);
+    function lwComp(){ const el = document.querySelector('[wire\\:id]'); if(!el || !window.Livewire) return null; return window.Livewire.find(el.getAttribute('wire:id')); }
+    function getInjectionSelected(){ const c = lwComp(); return c? (c.get('injectionSelected')||[]) : []; }
+    function setInjectionSelected(arr){ const c = lwComp(); if(c) c.set('injectionSelected', arr); }
+    function renderInjectionSelected(){
+        if(!injectionSelectedTags) return;
+        const ids = getInjectionSelected();
+        injectionSelectedTags.innerHTML = ids.map(id => {
+            const u = injectionPool.find(p=>p.id==id);
+            if(!u) return '';
+            return `<span class="px-2 py-1 rounded bg-red-800/40 border border-red-700/50 flex items-center gap-1">
+                <span>#${u.id} ${u.name}</span>
+                <button type="button" data-inj-remove="${u.id}" class="text-red-300 hover:text-white font-bold">×</button>
+            </span>`;
+        }).join('');
+    }
+    window.clearInjectionSelection = function(){ setInjectionSelected([]); renderInjectionSelected(); };
+    function openInjectionResults(){ if(injectionResults) injectionResults.classList.remove('hidden'); }
+    function closeInjectionResults(){ if(injectionResults) injectionResults.classList.add('hidden'); }
+    function filterInjection(q){
+        q = (q||'').toLowerCase();
+    const selected = new Set(getInjectionSelected());
+    return injectionPool.filter(u => u.id !== currentUserId && !selected.has(u.id) && (u.name.toLowerCase().includes(q) || (''+u.id).includes(q))).slice(0,30);
+    }
+    function renderInjectionResults(list){
+        if(!injectionResults) return;
+        if(!list.length){ injectionResults.innerHTML = '<div class="p-2 text-gray-400">Aucun résultat</div>'; return; }
+        injectionResults.innerHTML = list.map(u => `<button type="button" data-inj-add="${u.id}" class="w-full text-left px-3 py-1.5 hover:bg-red-800/40 flex justify-between"><span>#${u.id} ${u.name}</span></button>`).join('');
+    }
+    injectionSearch && injectionSearch.addEventListener('input', () => {
+        const list = filterInjection(injectionSearch.value);
+        renderInjectionResults(list); openInjectionResults();
+    });
+    document.addEventListener('click', (e)=>{
+        if(injectionResults && !injectionResults.contains(e.target) && injectionSearch !== e.target){ closeInjectionResults(); }
+    });
+    injectionResults && injectionResults.addEventListener('click', e => {
+        const btn = e.target.closest('[data-inj-add]'); if(!btn) return;
+        const id = parseInt(btn.getAttribute('data-inj-add'));
+        const arr = getInjectionSelected().slice();
+        if(!arr.includes(id)) arr.push(id);
+        setInjectionSelected(arr);
+        injectionSearch.value=''; renderInjectionSelected(); closeInjectionResults();
+    });
+    injectionSelectedTags && injectionSelectedTags.addEventListener('click', e => {
+        const btn = e.target.closest('[data-inj-remove]'); if(!btn) return;
+        const id = parseInt(btn.getAttribute('data-inj-remove'));
+        let arr = getInjectionSelected().slice();
+        arr = arr.filter(x=>x!==id);
+        setInjectionSelected(arr); renderInjectionSelected();
+    });
+    document.addEventListener('livewire:load', renderInjectionSelected);
     // Logout refs
     const logoutConfirmBtn = document.getElementById('logoutConfirmBtn');
     const modalLogout = document.getElementById('modalLogout');
@@ -823,7 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function openModal(el){ el.classList.remove('hidden'); el.classList.add('flex'); }
     function closeModal(el){ el.classList.add('hidden'); el.classList.remove('flex'); }
 
-    openBtn.addEventListener('click', () => { renderParis(); openModal(modalListe); });
+    openBtn && openBtn.addEventListener('click', () => { renderParis(); openModal(modalListe); });
 
     // Données fictives des paris en cours (référencent éventuellement un pari de la liste + choix)
     const pariesActifs = [

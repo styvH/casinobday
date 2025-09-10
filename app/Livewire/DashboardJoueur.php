@@ -34,6 +34,8 @@ class DashboardJoueur extends Component
 
     public string $adminMessage = '';
     public string $adminError = '';
+    // Admin: delete player
+    public ?int $deletePlayerId = null;
 
     public function mount(): void
     {
@@ -155,6 +157,33 @@ class DashboardJoueur extends Component
         $this->adminMessage = 'Injection réalisée sur '. $players->count() .' joueur(s).';
         $this->injectionAmount = 0.0;
         $this->injectionSelected = [];
+    }
+
+    public function adminDeletePlayer(): void
+    {
+        $this->resetAdminMessages();
+        $admin = $this->ensureAdmin();
+        $data = $this->validate([
+            'deletePlayerId' => 'required|integer|exists:users,id'
+        ]);
+        if($data['deletePlayerId'] === $admin->id){
+            $this->adminError = 'Vous ne pouvez pas vous supprimer.';
+            return;
+        }
+        $target = User::find($data['deletePlayerId']);
+        if(!$target){
+            $this->adminError = 'Joueur introuvable.';
+            return;
+        }
+        DB::transaction(function() use ($target){
+            // Suppression logique: supprimer sessions, transactions, compte puis user
+            $target->gameSessions()->delete();
+            $target->transactions()->delete();
+            $target->account()?->delete();
+            $target->delete();
+        });
+        $this->adminMessage = 'Joueur supprimé.';
+        $this->deletePlayerId = null;
     }
 
     protected function resetAdminMessages(): void
