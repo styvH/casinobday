@@ -97,9 +97,14 @@
     </div>
     <main class="relative w-full max-w-3xl bg-black bg-opacity-80 rounded-xl shadow-lg p-4 md:p-8 border-4 border-red-800 mt-20 md:mt-0">
         <!-- Bouton Paramètres icône seule -->
-        <button id="openSettingsBtn" aria-label="Paramètres" class="absolute top-2 right-2 md:top-3 md:right-3 w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-lg bg-black/60 border border-red-700 text-red-300 hover:text-white hover:border-red-500 hover:bg-red-800/40 transition shadow">
-            ⚙️
-        </button>
+        <div class="absolute top-2 right-2 md:top-3 md:right-3 flex items-center gap-2">
+            <button id="logoutConfirmBtn" aria-label="Déconnexion" class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-lg bg-black/60 border border-red-700 text-red-300 hover:text-white hover:border-red-500 hover:bg-red-800/40 transition shadow focus:outline-none focus:ring-2 focus:ring-red-600/60">
+                🔒
+            </button>
+            <button id="openSettingsBtn" aria-label="Paramètres" class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-lg bg-black/60 border border-red-700 text-red-300 hover:text-white hover:border-red-500 hover:bg-red-800/40 transition shadow focus:outline-none focus:ring-2 focus:ring-red-600/60">
+                ⚙️
+            </button>
+        </div>
         <h2 class="text-2xl md:text-4xl font-bold mb-4 md:mb-6 text-center text-red-500">Dashboard Joueur</h2>
         <div class="flex flex-col items-center mb-6 md:mb-8">
             <div class="text-xl md:text-2xl font-semibold mb-1 md:mb-2">Solde du compte</div>
@@ -503,6 +508,26 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
+<!-- Modal Déconnexion -->
+<div id="modalLogout" class="fixed inset-0 z-[59] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div class="w-11/12 max-w-sm bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-xl shadow-2xl p-6 flex flex-col gap-5">
+        <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-lg bg-red-800/40 border border-red-600/40 flex items-center justify-center text-xl">🔒</div>
+                <div class="flex-1">
+                        <h3 class="text-lg font-bold text-red-400">Confirmer la déconnexion</h3>
+                        <p class="text-xs text-gray-400 mt-1 leading-relaxed">Vous allez être déconnecté. Assurez-vous d'avoir enregistré vos actions importantes.</p>
+                </div>
+        </div>
+        <form id="logoutForm" method="POST" action="{{ route('logout') }}" class="flex flex-col gap-3">
+                @csrf
+                <div class="flex justify-end gap-3">
+                        <button type="button" data-close="modalLogout" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs font-semibold">Annuler</button>
+                        <button type="submit" class="px-5 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-xs font-bold shadow ring-1 ring-red-500/50">Se déconnecter</button>
+                </div>
+        </form>
+    </div>
+</div>
+
 <!-- Modal Historique -->
 <div id="modalHistorique" class="fixed inset-0 z-[55] hidden items-center justify-center bg-black/75 backdrop-blur-sm">
     <div class="w-11/12 md:w-4/5 lg:w-2/3 xl:w-1/2 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -601,6 +626,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const settingsSaveBtn = document.getElementById('settingsSaveBtn');
     const settingsError = document.getElementById('settingsError');
     const settingsSuccess = document.getElementById('settingsSuccess');
+    // Logout refs
+    const logoutConfirmBtn = document.getElementById('logoutConfirmBtn');
+    const modalLogout = document.getElementById('modalLogout');
 
     let pariSelectionne = null;
 
@@ -916,6 +944,11 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(()=>{
             setSettingsSuccess('Paramètres mis à jour (simulation)');
         },400);
+    });
+
+    // Logout modal
+    logoutConfirmBtn && logoutConfirmBtn.addEventListener('click', () => {
+        openModal(modalLogout);
     });
 
     // Donation modal logic
