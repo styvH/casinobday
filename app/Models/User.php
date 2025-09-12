@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Support\Facades\DB;
 
 /**
  * @property-read UserAccount|null $account
@@ -63,5 +64,35 @@ class User extends Authenticatable
     public function gameSessions()
     {
         return $this->hasMany(GameSession::class);
+    }
+
+    /**
+     * Crédite le joueur d'un gain (en euros) et journalise une transaction.
+     */
+    public function win(float $amount): void
+    {
+        $amountCents = (int) round($amount * 100);
+        if ($amountCents <= 0) {
+            return;
+        }
+
+        DB::transaction(function () use ($amountCents) {
+            // Verrouiller/charger le compte, créer si inexistant
+            $account = $this->account()->lockForUpdate()->first();
+            if (!$account) {
+                $account = $this->account()->create(['balance_cents' => 0]);
+            }
+
+            $account->balance_cents += $amountCents;
+            $account->save();
+
+            // Journaliser
+            $this->transactions()->create([
+                'type' => 'blackjack_win',
+                'amount_cents' => $amountCents,
+                'balance_after_cents' => $account->balance_cents,
+                'meta' => ['source' => 'blackjack'],
+            ]);
+        });
     }
 }

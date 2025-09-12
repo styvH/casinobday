@@ -1368,6 +1368,16 @@ document.addEventListener('DOMContentLoaded', () => {
         else { outcome='Push'; win = bjBet; }
         blackjackStatus.textContent = outcome + ' | Total Joueur '+pv+' / Croupier '+dv;
         blackjackWinDisplay.textContent = win.toLocaleString('fr-FR') + ' €';
+
+        // Créditer le gain côté serveur (Livewire)
+        try {
+            if (win > 0 && window.Livewire) {
+                const comp = lwComp();
+                if (comp && typeof comp.call === 'function') {
+                    comp.call('onBlackjackWon', parseFloat(win));
+                }
+            }
+        } catch(e) { console.warn('Livewire credit error', e); }
     }
     function bjDealerPlay(){
         while(bjHandValue(bjDealer) < 17){

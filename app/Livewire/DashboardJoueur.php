@@ -37,6 +37,10 @@ class DashboardJoueur extends Component
     // Admin: delete player
     public ?int $deletePlayerId = null;
 
+    protected $listeners = [
+        'blackjackWon' => 'onBlackjackWon',
+    ];
+
     public function mount(): void
     {
         $user = Auth::user();
@@ -66,6 +70,7 @@ class DashboardJoueur extends Component
         }
         return view('livewire.dashboard-joueur', [
             'allPlayers' => $allPlayers,
+            'balance' => $this->balance,
         ]);
     }
 
@@ -183,5 +188,23 @@ class DashboardJoueur extends Component
     {
         $this->adminMessage = '';
         $this->adminError = '';
+    }
+
+    /**
+     * Livewire listener: ajoute le gain au solde du joueur courant.
+     */
+    public function onBlackjackWon(float $amount): void
+    {
+        $user = Auth::user();
+        if(!$user instanceof User){ return; }
+
+        // Sécurité minimale
+        if ($amount <= 0) { return; }
+
+        $user->win($amount);
+
+        // Rafraîchir solde affiché
+        $account = $user->account()->first();
+        $this->balance = $account ? ($account->balance_cents / 100) : 0.0;
     }
 }
