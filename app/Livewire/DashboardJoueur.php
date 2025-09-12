@@ -59,7 +59,7 @@ class DashboardJoueur extends Component
         $this->balance = $account->balance_cents / 100;
 
     // Blackjack bet limits based on balance
-    $min = $this->balance > 10000 ? $this->balance * 0.10 : 10000;
+    $min = $this->balance > 10000 ? $this->balance * 0.10 + 1 : 10000;
     $max = $this->balance >= 0 ? max(10000, $this->balance) : max(10000, abs($this->balance)/2);
     $this->betMin = (float) floor($min);
     $this->betMax = (float) floor($max);

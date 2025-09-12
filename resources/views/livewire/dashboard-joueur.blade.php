@@ -327,7 +327,7 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <!-- Modal Blackjack -->
-<div id="modalBlackjack" class="fixed inset-0 z-[80] hidden items-center justify-center bg-black/80 backdrop-blur-sm">
+<div id="modalBlackjack" wire:ignore class="fixed inset-0 z-[80] hidden items-center justify-center bg-black/80 backdrop-blur-sm">
   <div class="w-11/12 md:w-3/4 lg:w-2/3 xl:w-1/2 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[95vh] overflow-hidden flex flex-col">
     <div class="flex items-center justify-between px-5 py-4 border-b border-red-800">
         <h3 class="text-lg md:text-2xl font-bold text-red-400 flex items-center gap-2">🃏 Blackjack</h3>
@@ -340,7 +340,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="grid md:grid-cols-3 gap-4 items-end">
                 <div class="md:col-span-1">
                     <label class="block text-[11px] font-semibold text-red-300 mb-1">Mise (€)</label>
-                    <input id="blackjackBetInput" type="number" min="{{ (int) $betMin }}" max="{{ (int) $betMax }}" step="50" value="{{ (int) $betMin }}" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2" />
+                    <input id="blackjackBetInput" type="number" min="{{ (int) $betMin }}" max="{{ (int) $betMax }}" step="1000" value="{{ (int) $betMin }}" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2" />
                 </div>
                 <div class="md:col-span-2 flex flex-wrap gap-2 text-[11px]">
                     @php
