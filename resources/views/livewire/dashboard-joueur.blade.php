@@ -467,7 +467,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="bg-red-900/20 border border-red-800/40 rounded-lg p-4 space-y-3">
             <h4 class="text-sm font-semibold text-red-300 flex items-center gap-2">🛠️ Espace Admin</h4>
             <p class="text-[11px] text-gray-400">Accédez aux outils de gestion.</p>
-            <button id="openAdminBtn" type="button" class="px-3 py-2 rounded-md bg-red-700 hover:bg-red-800 text-xs font-semibold shadow ring-1 ring-red-500/40">Outils Admin</button>
+            <button id="openAdminBtn" type="button" wire:click="$set('adminModalOpen', true)" class="px-3 py-2 rounded-md bg-red-700 hover:bg-red-800 text-xs font-semibold shadow ring-1 ring-red-500/40">Outils Admin</button>
         </div>
         @endif
 
@@ -522,11 +522,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 @if($isAdmin ?? false)
 <!-- Modal Admin -->
-<div id="modalAdmin" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/75 backdrop-blur-sm">
+<div id="modalAdmin" class="fixed inset-0 z-[70] {{ $adminModalOpen ? 'flex' : 'hidden' }} items-center justify-center bg-black/75 backdrop-blur-sm">
   <div class="w-11/12 md:w-3/4 lg:w-3/5 xl:w-1/2 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
     <div class="flex items-center justify-between px-5 py-4 border-b border-red-800">
         <h3 class="text-lg md:text-2xl font-bold text-red-400 flex items-center gap-2">🛠️ Administration</h3>
-        <button data-close="modalAdmin" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
+    <button data-close="modalAdmin" wire:click="$set('adminModalOpen', false)" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
     </div>
     <div class="p-6 space-y-8 overflow-y-auto classement-scrollbar text-sm">
         <div class="space-y-4">
@@ -636,7 +636,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="text-[10px] text-gray-500">Toutes les opérations sont journalisées dans les transactions.</div>
     </div>
     <div class="px-5 py-4 border-t border-red-800 bg-black/60 flex justify-end gap-3">
-        <button data-close="modalAdmin" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs md:text-sm font-semibold">Fermer</button>
+    <button data-close="modalAdmin" wire:click="$set('adminModalOpen', false)" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs md:text-sm font-semibold">Fermer</button>
     </div>
   </div>
 </div>

@@ -13,6 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class DashboardJoueur extends Component
 {
+    public bool $adminModalOpen = false;
     public float $balance = 0.0;
     public int $pariesEnCours = 0;
     public float $totalMise = 0.0;
@@ -107,6 +108,7 @@ class DashboardJoueur extends Component
         $this->adminMessage = 'Joueur créé avec succès.';
         $this->reset(['newPlayerName','newPlayerEmail','newPlayerPassword']);
         $this->newPlayerBalance = 1000.0;
+    $this->adminModalOpen = true;
     }
 
     public function adminInjectFunds(): void
@@ -115,8 +117,7 @@ class DashboardJoueur extends Component
         $this->ensureAdmin();
         $data = $this->validate([
             'injectionAmount' => 'required|numeric|min:0.01|max:1000000',
-            'injectionScope' => 'required|in:all,selected',
-            'injectionSelected' => 'array',
+            'injectionSelected' => 'array|min:1',
             'injectionSelected.*' => 'integer|exists:users,id',
         ]);
         $amountCents = (int) round($data['injectionAmount'] * 100);
@@ -124,16 +125,7 @@ class DashboardJoueur extends Component
             $this->adminError = 'Montant invalide.';
             return;
         }
-        // Détermination de la collection de joueurs concernés
-        $query = User::query();
-        if($data['injectionScope'] === 'selected'){
-            if(empty($data['injectionSelected'])){
-                $this->adminError = 'Sélectionnez au moins un joueur.';
-                return;
-            }
-            $query->whereIn('id', $data['injectionSelected']);
-        }
-        $players = $query->get();
+        $players = User::whereIn('id', $data['injectionSelected'])->get();
         if($players->isEmpty()){
             $this->adminError = 'Aucun joueur ciblé.';
             return;
@@ -157,6 +149,7 @@ class DashboardJoueur extends Component
         $this->adminMessage = 'Injection réalisée sur '. $players->count() .' joueur(s).';
         $this->injectionAmount = 0.0;
         $this->injectionSelected = [];
+        $this->adminModalOpen = true;
     }
 
     public function adminDeletePlayer(): void
@@ -184,6 +177,7 @@ class DashboardJoueur extends Component
         });
         $this->adminMessage = 'Joueur supprimé.';
         $this->deletePlayerId = null;
+    $this->adminModalOpen = true;
     }
 
     protected function resetAdminMessages(): void
