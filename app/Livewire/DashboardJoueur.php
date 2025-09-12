@@ -30,7 +30,6 @@ class DashboardJoueur extends Component
 
     // Admin: injection form
     public float $injectionAmount = 0.0; // euros
-    public string $injectionScope = 'all'; // 'all' or 'selected'
     public array $injectionSelected = []; // user ids
 
     public string $adminMessage = '';

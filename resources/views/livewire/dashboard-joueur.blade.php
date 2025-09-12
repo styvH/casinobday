@@ -571,19 +571,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         <input wire:model.defer="injectionAmount" type="number" step="0.01" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-600" />
                         @error('injectionAmount') <span class="text-[10px] text-red-400">{{ $message }}</span> @enderror
                     </div>
-                    <div class="md:col-span-1">
-                        <label class="block text-[11px] font-semibold text-red-300 mb-1">Portée</label>
-                        <select wire:model="injectionScope" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-600">
-                            <option value="all">Tous les joueurs</option>
-                            <option value="selected">Liste sélectionnée</option>
-                        </select>
-                    </div>
-                    <div class="md:col-span-1" x-data>
-                        <label class="block text-[11px] font-semibold text-red-300 mb-1">Joueurs (si sélection)</label>
+                    <div class="md:col-span-2" x-data wire:ignore>
+                        <label class="block text-[11px] font-semibold text-red-300 mb-1">Joueurs destinataires</label>
                         <div class="space-y-2">
-                            <div class="flex items-center justify-between">
+                            <div class="flex items-center justify-between gap-2">
                                 <span class="text-[11px] text-gray-400">Sélectionnés</span>
-                                <button type="button" class="text-[10px] px-2 py-0.5 rounded bg-gray-700/60 hover:bg-gray-600" onclick="window.clearInjectionSelection && window.clearInjectionSelection()">Vider</button>
+                                <div class="flex items-center gap-2">
+                                    <button type="button" class="text-[10px] px-2 py-0.5 rounded bg-red-700/70 hover:bg-red-700" onclick="window.addAllInjectionSelection && window.addAllInjectionSelection()">Ajouter tout</button>
+                                    <button type="button" class="text-[10px] px-2 py-0.5 rounded bg-gray-700/60 hover:bg-gray-600" onclick="window.clearInjectionSelection && window.clearInjectionSelection()">Vider</button>
+                                </div>
                             </div>
                             <div id="injectionSelectedTags" class="flex flex-wrap gap-1 min-h-[2rem] p-2 bg-black/40 rounded border border-red-800/40 text-[11px]"></div>
                             <div class="relative">
@@ -761,10 +757,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const settingsError = document.getElementById('settingsError');
     const settingsSuccess = document.getElementById('settingsSuccess');
     // Admin injection selection UI
-    const injectionScopeSelect = document.querySelector('[wire\\:model="injectionScope"]');
-    const injectionSearch = document.getElementById('injectionSearch');
-    const injectionResults = document.getElementById('injectionResults');
-    const injectionSelectedTags = document.getElementById('injectionSelectedTags');
+    function qInjectionRefs(){
+        return {
+            injectionSearch: document.getElementById('injectionSearch'),
+            injectionResults: document.getElementById('injectionResults'),
+            injectionSelectedTags: document.getElementById('injectionSelectedTags'),
+        };
+    }
+    let { injectionSearch, injectionResults, injectionSelectedTags } = qInjectionRefs();
     const adminPlayersEl = document.getElementById('adminPlayersData');
     let __adminMeta = { currentUserId:0, players:[] };
     if(adminPlayersEl){
@@ -776,6 +776,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function getInjectionSelected(){ const c = lwComp(); return c? (c.get('injectionSelected')||[]) : []; }
     function setInjectionSelected(arr){ const c = lwComp(); if(c) c.set('injectionSelected', arr); }
     function renderInjectionSelected(){
+        // Refresh refs in case DOM swapped
+        ({ injectionSelectedTags } = qInjectionRefs());
         if(!injectionSelectedTags) return;
         const ids = getInjectionSelected();
         injectionSelectedTags.innerHTML = ids.map(id => {
@@ -788,41 +790,70 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
     window.clearInjectionSelection = function(){ setInjectionSelected([]); renderInjectionSelected(); };
-    function openInjectionResults(){ if(injectionResults) injectionResults.classList.remove('hidden'); }
-    function closeInjectionResults(){ if(injectionResults) injectionResults.classList.add('hidden'); }
+    window.addAllInjectionSelection = function(){
+        const allIds = injectionPool.map(u=>u.id);
+        setInjectionSelected(allIds);
+        renderInjectionSelected();
+    };
+    function openInjectionResults(){ ({ injectionResults } = qInjectionRefs()); if(injectionResults) injectionResults.classList.remove('hidden'); }
+    function closeInjectionResults(){ ({ injectionResults } = qInjectionRefs()); if(injectionResults) injectionResults.classList.add('hidden'); }
     function filterInjection(q){
         q = (q||'').toLowerCase();
     const selected = new Set(getInjectionSelected());
-    return injectionPool.filter(u => u.id !== currentUserId && !selected.has(u.id) && (u.name.toLowerCase().includes(q) || (''+u.id).includes(q))).slice(0,30);
+    return injectionPool.filter(u => !selected.has(u.id) && (u.name.toLowerCase().includes(q) || (''+u.id).includes(q))).slice(0,30);
     }
     function renderInjectionResults(list){
         if(!injectionResults) return;
         if(!list.length){ injectionResults.innerHTML = '<div class="p-2 text-gray-400">Aucun résultat</div>'; return; }
         injectionResults.innerHTML = list.map(u => `<button type="button" data-inj-add="${u.id}" class="w-full text-left px-3 py-1.5 hover:bg-red-800/40 flex justify-between"><span>#${u.id} ${u.name}</span></button>`).join('');
     }
-    injectionSearch && injectionSearch.addEventListener('input', () => {
-        const list = filterInjection(injectionSearch.value);
-        renderInjectionResults(list); openInjectionResults();
-    });
+    function bindInjectionSearch(){
+        ({ injectionSearch } = qInjectionRefs());
+        if(!injectionSearch) return;
+        injectionSearch.addEventListener('input', () => {
+            const list = filterInjection(injectionSearch.value);
+            renderInjectionResults(list); openInjectionResults();
+        });
+    }
+    bindInjectionSearch();
     document.addEventListener('click', (e)=>{
         if(injectionResults && !injectionResults.contains(e.target) && injectionSearch !== e.target){ closeInjectionResults(); }
     });
-    injectionResults && injectionResults.addEventListener('click', e => {
-        const btn = e.target.closest('[data-inj-add]'); if(!btn) return;
-        const id = parseInt(btn.getAttribute('data-inj-add'));
-        const arr = getInjectionSelected().slice();
-        if(!arr.includes(id)) arr.push(id);
-        setInjectionSelected(arr);
-        injectionSearch.value=''; renderInjectionSelected(); closeInjectionResults();
+    document.addEventListener('click', e => {
+        const { injectionResults } = qInjectionRefs();
+        const btn = e.target.closest('[data-inj-add]');
+        if(btn && injectionResults && injectionResults.contains(btn)){
+            const id = parseInt(btn.getAttribute('data-inj-add'));
+            const arr = getInjectionSelected().slice();
+            if(!arr.includes(id)) arr.push(id);
+            setInjectionSelected(arr);
+            const { injectionSearch } = qInjectionRefs();
+            if(injectionSearch) injectionSearch.value='';
+            renderInjectionSelected(); closeInjectionResults();
+        }
     });
-    injectionSelectedTags && injectionSelectedTags.addEventListener('click', e => {
-        const btn = e.target.closest('[data-inj-remove]'); if(!btn) return;
-        const id = parseInt(btn.getAttribute('data-inj-remove'));
-        let arr = getInjectionSelected().slice();
-        arr = arr.filter(x=>x!==id);
-        setInjectionSelected(arr); renderInjectionSelected();
+    document.addEventListener('click', e => {
+        const btn = e.target.closest('[data-inj-remove]');
+        if(!btn) return;
+        const { injectionSelectedTags } = qInjectionRefs();
+        if(injectionSelectedTags && injectionSelectedTags.contains(btn)){
+            const id = parseInt(btn.getAttribute('data-inj-remove'));
+            let arr = getInjectionSelected().slice();
+            arr = arr.filter(x=>x!==id);
+            setInjectionSelected(arr); renderInjectionSelected();
+        }
     });
-    document.addEventListener('livewire:load', renderInjectionSelected);
+    document.addEventListener('livewire:load', () => {
+        // Initial render + ensure bindings after Livewire boot
+        renderInjectionSelected();
+        bindInjectionSearch();
+    });
+    document.addEventListener('livewire:update', () => {
+        // Livewire DOM diff occurred: refresh refs and re-bind input
+        ({ injectionSearch, injectionResults, injectionSelectedTags } = qInjectionRefs());
+        bindInjectionSearch();
+        renderInjectionSelected();
+    });
     // Logout refs
     const logoutConfirmBtn = document.getElementById('logoutConfirmBtn');
     const modalLogout = document.getElementById('modalLogout');
