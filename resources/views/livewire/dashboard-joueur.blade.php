@@ -144,8 +144,36 @@
                 'currentUserId' => auth()->id(),
                 'players' => ($allPlayers ?? collect())->map(fn($u)=>['id'=>$u->id,'name'=>$u->name])->values(),
             ];
+            $betEventsPayload = ($betEvents ?? collect())->map(function($e){
+                return [
+                    'id' => $e->id,
+                    'titre' => $e->title,
+                    'type' => $e->status,
+                    'miseMin' => (int) floor(($e->min_bet_cents ?? 0) / 100),
+                    'miseMax' => (int) floor(($e->max_bet_cents ?? 0) / 100),
+                    'margin' => (float) $e->margin,
+                    'description' => $e->description,
+                    'choices' => ($e->choices ?? collect())->map(function($c){
+                        return [
+                            // UI expects id as string code; also include numeric for backend
+                            'id' => (string) $c->code,
+                            'choiceId' => (int) $c->id,
+                            'label' => $c->label,
+                            'participants' => (int) $c->participants_count,
+                        ];
+                    })->values(),
+                ];
+            })->values();
+            $userBetsPayload = ($userActiveBets ?? collect())->map(function($b){
+                return [
+                    'ref' => (int) $b->bet_event_id,
+                    'choix' => (string) optional($b->choice)->code ?? '',
+                    'mise' => (int) floor(($b->amount_cents ?? 0) / 100),
+                ];
+            })->values();
         @endphp
-    <script id="adminPlayersData" type="application/json">{!! json_encode($adminPlayersPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
+        <script id="adminPlayersData" type="application/json">{!! json_encode($adminPlayersPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
+        <script id="betData" type="application/json">{!! json_encode(['events' => $betEventsPayload, 'activeBets' => $userBetsPayload], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
     <div id="playerMeta" data-balance="{{ (float)($balance ?? 0) }}" class="hidden"></div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -170,6 +198,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <button class="filter-pari bg-gray-800 hover:bg-gray-700 text-red-300 px-3 py-1 rounded-full" data-filter="disponible">Disponibles</button>
             <button class="filter-pari bg-gray-800 hover:bg-gray-700 text-red-300 px-3 py-1 rounded-full" data-filter="annonce">Annoncés</button>
             <button class="filter-pari bg-gray-800 hover:bg-gray-700 text-red-300 px-3 py-1 rounded-full" data-filter="en_cours">En cours</button>
+            <button id="openNewBetBtn" class="ml-auto bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded-full font-semibold">+ Nouveau pari</button>
         </div>
         <div class="px-5 pb-4 text-[10px] md:text-xs text-gray-400 italic">(Données fictives pour test)</div>
         <div class="flex-1 overflow-y-auto classement-scrollbar px-5 pb-5" id="listeParisContainer"></div>
@@ -178,6 +207,41 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
     </div>
 </div>
+
+    <!-- Modal Nouveau Pari -->
+    <div id="modalNewBet" class="fixed inset-0 z-[72] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div class="w-11/12 md:w-3/4 lg:w-1/2 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col">
+        <div class="flex items-center justify-between px-5 py-4 border-b border-red-800">
+            <h3 class="text-lg md:text-2xl font-bold text-red-400 flex items-center gap-2">Créer un pari</h3>
+            <button data-close="modalNewBet" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
+        </div>
+        <div class="p-6 space-y-5 overflow-y-auto classement-scrollbar text-sm">
+            <div>
+                <label class="block text-xs font-semibold text-red-300 mb-1">Description</label>
+                <input id="newBetDesc" type="text" placeholder="Ex: Duel surprise de minuit" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2" />
+            </div>
+            <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-red-300 mb-1">Choix 1</label>
+                    <input id="newBetChoice1" type="text" placeholder="Ex: Joueur A" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2" />
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-red-300 mb-1">Choix 2</label>
+                    <input id="newBetChoice2" type="text" placeholder="Ex: Joueur B" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2" />
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-red-300 mb-1">Choix 3 (facultatif)</label>
+                <input id="newBetChoice3" type="text" placeholder="Ex: Égalité" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2" />
+            </div>
+            <div id="newBetError" class="text-[11px] text-red-400 font-semibold hidden"></div>
+        </div>
+        <div class="px-5 py-4 border-t border-red-800 bg-black/60 flex justify-end gap-3">
+            <button data-close="modalNewBet" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs md:text-sm font-semibold">Annuler</button>
+            <button id="createNewBetBtn" class="px-5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-xs md:text-sm font-bold shadow ring-1 ring-emerald-500/50">Créer</button>
+        </div>
+      </div>
+      </div>
 
 <!-- Modal Paris En Cours -->
 <div id="modalPariesEnCours" class="fixed inset-0 z-[65] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -708,6 +772,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalDetails = document.getElementById('modalPariDetails');
     const listeContainer = document.getElementById('listeParisContainer');
     const filterButtons = document.querySelectorAll('.filter-pari');
+    const openNewBetBtn = document.getElementById('openNewBetBtn');
+    const modalNewBet = document.getElementById('modalNewBet');
+    const newBetDesc = document.getElementById('newBetDesc');
+    const newBetChoice1 = document.getElementById('newBetChoice1');
+    const newBetChoice2 = document.getElementById('newBetChoice2');
+    const newBetChoice3 = document.getElementById('newBetChoice3');
+    const newBetError = document.getElementById('newBetError');
+    const createNewBetBtn = document.getElementById('createNewBetBtn');
     // Details refs
     const pariTitre = document.getElementById('pariTitre');
     const pariDescription = document.getElementById('pariDescription');
@@ -882,46 +954,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let pariSelectionne = null;
 
-    // Données fictives multi-issues (pari mutuel simplifié) : chaque pari a 2 ou 3 choix.
-    // margin (<1) simule commission => cote = (1/share)*margin
-    const paris = [
-    { id:1, titre:'Duel Poker Express', type:'disponible', miseMin:1000, miseMax:100000, margin:0.92, description:'Heads-up rapide. Sélectionnez le vainqueur.', choices:[
-            { id:'A', label:'Joueur A', participants:42 },
-            { id:'B', label:'Joueur B', participants:58 },
-        ]},
-    { id:2, titre:'Tournoi Mini 6 joueurs', type:'annonce', miseMin:1000, miseMax:100000, margin:0.90, description:'Pariez sur le style de victoire.', choices:[
-            { id:'ch', label:'Chip leader conserve', participants:20 },
-            { id:'up', label:'Remontada', participants:31 },
-            { id:'ko', label:'KO rapide final', participants:9 },
-        ]},
-    { id:3, titre:'Blackjack Série 5 mains', type:'en_cours', miseMin:1000, miseMax:100000, margin:0.94, description:'Résultat cumul des 5 prochaines mains.', choices:[
-            { id:'p', label:'Player domine', participants:70 },
-            { id:'d', label:'Dealer domine', participants:55 },
-            { id:'eq', label:'Équilibré', participants:15 },
-        ]},
-    { id:4, titre:'Roulette Numéro chaud', type:'disponible', miseMin:1000, miseMax:100000, margin:0.88, description:'Le numéro chaud ressort-il ?', choices:[
-            { id:'oui', label:'Oui', participants:33 },
-            { id:'non', label:'Non', participants:47 },
-        ]},
-    { id:5, titre:'Sit & Go 3 joueurs', type:'annonce', miseMin:1000, miseMax:100000, margin:0.90, description:'Qui remporte la table ?', choices:[
-            { id:'p1', label:'Seat 1', participants:10 },
-            { id:'p2', label:'Seat 2', participants:14 },
-            { id:'p3', label:'Seat 3', participants:6 },
-        ]},
-    { id:6, titre:'Duel High Stakes', type:'disponible', miseMin:1000, miseMax:100000, margin:0.93, description:'Match high stakes intense.', choices:[
-            { id:'A', label:'Pro A', participants:8 },
-            { id:'B', label:'Pro B', participants:12 },
-        ]},
-    { id:7, titre:'Tournoi 12 joueurs', type:'annonce', miseMin:1000, miseMax:100000, margin:0.90, description:'Style de fin probable.', choices:[
-            { id:'hu', label:'Heads-Up long', participants:18 },
-            { id:'burst', label:'Eliminations rapides', participants:22 },
-            { id:'mid', label:'Rythme stable', participants:11 },
-        ]},
-    { id:8, titre:'Challenge Gains x2', type:'en_cours', miseMin:1000, miseMax:100000, margin:0.91, description:'Atteindra-t-on le double ?', choices:[
-            { id:'dbl', label:'Oui doublé', participants:41 },
-            { id:'no', label:'Non', participants:37 },
-        ]},
-    ];
+    // Charger les événements de pari et les paris actifs depuis le serveur
+    const betDataEl = document.getElementById('betData');
+    const __betData = betDataEl ? JSON.parse(betDataEl.textContent || '{}') : { events: [], activeBets: [] };
+    const paris = Array.isArray(__betData.events) ? __betData.events : [];
 
     function formatEuros(n){
         return new Intl.NumberFormat('fr-FR',{minimumFractionDigits:0, maximumFractionDigits:2}).format(n) + ' €';
@@ -978,14 +1014,17 @@ document.addEventListener('DOMContentLoaded', () => {
     function closeModal(el){ el.classList.add('hidden'); el.classList.remove('flex'); }
 
     openBtn && openBtn.addEventListener('click', () => { renderParis(); openModal(modalListe); });
+    openNewBetBtn && openNewBetBtn.addEventListener('click', () => {
+        if(newBetError){ newBetError.classList.add('hidden'); newBetError.textContent=''; }
+        if(newBetDesc) newBetDesc.value='';
+        if(newBetChoice1) newBetChoice1.value='';
+        if(newBetChoice2) newBetChoice2.value='';
+        if(newBetChoice3) newBetChoice3.value='';
+        openModal(modalNewBet);
+    });
 
     // Données fictives des paris en cours (référencent éventuellement un pari de la liste + choix)
-    const pariesActifs = [
-        { ref:1, choix:'A', mise:2500 },
-        { ref:3, choix:'p', mise:1500 },
-        { ref:4, choix:'non', mise:3000 },
-        { ref:6, choix:'B', mise:5000 },
-    ];
+    const pariesActifs = Array.isArray(__betData.activeBets) ? __betData.activeBets : [];
 
     function renderPariesEnCours(){
         if(!pariesActifs.length){
@@ -1781,10 +1820,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const mise = parseFloat(pariMise.value)||0;
         const oddsMap = computeOdds(pariSelectionne);
         const currentOdds = oddsMap[pariSelectionne.selectedChoice] || 0;
-        alert(`(Démo) Pari confirmé: ${pariSelectionne.titre}\nChoix: ${pariSelectionne.selectedChoice}\nCôte: ${currentOdds.toFixed(2)}\nMise: ${mise} €\nGain potentiel: ${pariGainPotentiel.textContent}`);
+        // Trouver la choiceId numérique pour l'appel serveur
         const choice = pariSelectionne.choices.find(c=>c.id===pariSelectionne.selectedChoice);
+        const choiceId = choice ? parseInt(choice.choiceId) : null;
+        if(!choiceId){ alert('Choix invalide'); return; }
+        try {
+            if (window.Livewire) {
+                const comp = lwComp();
+                if (comp && typeof comp.call === 'function') {
+                    comp.call('placeBet', parseInt(pariSelectionne.id), choiceId, parseFloat(mise));
+                }
+            }
+        } catch(e) { console.warn('Livewire placeBet error', e); }
+
+        // MAJ optimiste UI
         if(choice){ choice.participants += 1; }
+        pariesActifs.unshift({ ref: parseInt(pariSelectionne.id), choix: String(pariSelectionne.selectedChoice), mise: Math.floor(mise) });
         closeModal(modalDetails);
+        // Optionnel: message
+        alert(`Pari placé: ${pariSelectionne.titre}\nChoix: ${choice?.label || pariSelectionne.selectedChoice}\nCôte: ${currentOdds.toFixed(2)}\nMise: ${mise.toLocaleString('fr-FR')} €`);
     });
 
     // Fermeture modals générique
@@ -1805,6 +1859,33 @@ document.addEventListener('DOMContentLoaded', () => {
             const target = document.getElementById(targetId);
             if(target) closeModal(target);
         });
+    });
+    // Création nouveau pari
+    function setNewBetError(msg){ if(!newBetError) return; if(!msg){ newBetError.classList.add('hidden'); newBetError.textContent=''; return; } newBetError.textContent = msg; newBetError.classList.remove('hidden'); }
+    createNewBetBtn && createNewBetBtn.addEventListener('click', () => {
+        const desc = (newBetDesc?.value||'').trim();
+        const c1 = (newBetChoice1?.value||'').trim();
+        const c2 = (newBetChoice2?.value||'').trim();
+        const c3 = (newBetChoice3?.value||'').trim();
+        if(!desc || !c1 || !c2){ setNewBetError('Description et deux choix minimum requis'); return; }
+        setNewBetError('');
+        try {
+            if (window.Livewire) {
+                const comp = lwComp();
+                if (comp && typeof comp.call === 'function') {
+                    comp.call('createBetEvent', desc, c1, c2, c3 || null);
+                }
+            }
+        } catch(e) { console.warn('Livewire createBetEvent error', e); }
+        // MAJ optimiste: ajouter à la liste locale
+        const newId = Math.max(0, ...paris.map(p=>parseInt(p.id)||0)) + 1;
+        const item = { id: newId, titre: desc, type: 'disponible', miseMin: 1000, miseMax: 100000, margin: 0.90, description: desc, choices: [ { id:'A', label:c1, participants:0 }, { id:'B', label:c2, participants:0 } ] };
+        if(c3){ item.choices.push({ id:'C', label:c3, participants:0 }); }
+        paris.unshift(item);
+        renderParis();
+        closeModal(modalNewBet);
+        // Ouvrir le listing des paris si pas déjà
+        openModal(modalListe);
     });
     window.addEventListener('keydown', e => {
     if(e.key === 'Escape') { closeModal(modalDetails); closeModal(modalListe); closeModal(modalPariesEnCours); closeModal(modalInscriptionPhysique); if(bjFinished) closeModal(modalBlackjack); closeModal(modalHistorique); }

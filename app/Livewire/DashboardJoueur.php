@@ -10,6 +10,9 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use App\Models\BetEvent;
+use App\Models\BetChoice;
+use App\Models\Bet;
 
 class DashboardJoueur extends Component
 {
@@ -62,10 +65,12 @@ class DashboardJoueur extends Component
     $this->betMax = (float) floor($max);
 
         // Sessions de jeu actives
-        $activeSessions = $user->gameSessions()->where('status','active');
-        $this->pariesEnCours = (clone $activeSessions)->count();
-        $this->totalMise = (clone $activeSessions)->sum('stake_cents') / 100;
-        $this->gainsFuturs = (clone $activeSessions)->sum('potential_win_cents') / 100;
+    $activeSessions = $user->gameSessions()->where('status','active');
+    // Paris ouverts
+    $openBets = $user->bets()->where('status','open');
+    $this->pariesEnCours = (clone $activeSessions)->count() + (clone $openBets)->count();
+    $this->totalMise = ((clone $activeSessions)->sum('stake_cents') + (clone $openBets)->sum('amount_cents')) / 100;
+    $this->gainsFuturs = ((clone $activeSessions)->sum('potential_win_cents') + (clone $openBets)->sum('potential_win_cents')) / 100;
     }
 
     public function render()
@@ -82,12 +87,28 @@ class DashboardJoueur extends Component
             ->orderBy('users.name')
             ->limit(50)
             ->get();
+        // Bet events and user's active bets
+        $betEvents = BetEvent::with(['choices' => function($q){ $q->orderBy('id'); }])
+            ->orderByRaw("FIELD(status, 'disponible','annonce','en_cours','ferme')")
+            ->orderBy('id')
+            ->limit(100)
+            ->get();
+        $user = Auth::user();
+        $userActiveBets = collect();
+        if ($user) {
+            $userActiveBets = Bet::with(['event','choice'])
+                ->where('user_id', $user->id)
+                ->where('status','open')
+                ->latest()->limit(50)->get();
+        }
         return view('livewire.dashboard-joueur', [
             'allPlayers' => $allPlayers,
             'balance' => $this->balance,
             'betMin' => $this->betMin,
             'betMax' => $this->betMax,
             'leaderboard' => $leaderboard,
+            'betEvents' => $betEvents,
+            'userActiveBets' => $userActiveBets,
         ]);
     }
 
@@ -178,7 +199,7 @@ class DashboardJoueur extends Component
 
         // 🔄 rafraîchir le solde de l’admin connecté
         $current = Auth::user();
-        if ($current) {
+        if ($current instanceof User) {
             $account = $current->account()->first();
             $this->balance = $account?->balance ?? 0.0;
         }
@@ -287,5 +308,123 @@ class DashboardJoueur extends Component
         // Rafraîchir le solde affiché
         $account = $user->account()->first();
         $this->balance = $account?->balance ?? 0.0;
+    }
+
+    /**
+     * Place a bet on an event choice; amount in euros.
+     */
+    public function placeBet(int $eventId, int $choiceId, float $amount): void
+    {
+        $user = Auth::user();
+        if(!$user instanceof User){ return; }
+
+        $event = BetEvent::with('choices')->find($eventId);
+        if(!$event){ throw ValidationException::withMessages(['bet' => 'Événement introuvable']); }
+        if(!in_array($event->status, ['disponible','en_cours','annonce'])){
+            throw ValidationException::withMessages(['bet' => 'Événement fermé']);
+        }
+        $choice = $event->choices->firstWhere('id', $choiceId);
+        if(!$choice){ throw ValidationException::withMessages(['bet' => 'Choix invalide']); }
+
+        $amountCents = (int) round($amount * 100);
+        if ($amountCents <= 0) {
+            throw ValidationException::withMessages(['amount' => 'Montant invalide']);
+        }
+        // Validate against event min/max
+        if ($amountCents < $event->min_bet_cents || $amountCents > $event->max_bet_cents) {
+            throw ValidationException::withMessages(['amount' => 'Hors limites']);
+        }
+
+        DB::transaction(function () use ($user, $event, $choice, $amountCents) {
+            // Compute dynamic odds based on participants and margin at placement time
+            $total = max(1, (int) $event->choices->sum('participants_count'));
+            $share = $choice->participants_count > 0 ? ($choice->participants_count / $total) : 0.0;
+            $odds = $share <= 0 ? 0.0 : (1.0 / $share) * (float) $event->margin;
+            if ($odds <= 0) { $odds = 1.00; }
+            $potential = (int) round($amountCents * $odds);
+
+            // Debit balance via transaction and create Bet
+            $account = $user->account()->lockForUpdate()->first();
+            if(!$account){ $account = $user->account()->create(['balance_cents' => 0]); }
+            $account->balance_cents -= $amountCents;
+            $account->save();
+            $user->transactions()->create([
+                'type' => 'bet_place',
+                'amount_cents' => -$amountCents,
+                'balance_after_cents' => $account->balance_cents,
+                'reference' => 'BET-'.now()->format('YmdHis').'-'.$event->id,
+                'meta' => [
+                    'bet_event_id' => $event->id,
+                    'bet_choice_id' => $choice->id,
+                ],
+            ]);
+
+            $bet = Bet::create([
+                'user_id' => $user->id,
+                'bet_event_id' => $event->id,
+                'bet_choice_id' => $choice->id,
+                'amount_cents' => $amountCents,
+                'odds' => $odds,
+                'status' => 'open',
+                'potential_win_cents' => $potential,
+                'reference' => 'B'.$user->id.'E'.$event->id.'C'.$choice->id.'T'.time(),
+            ]);
+
+            // Increment participants on the chosen choice
+            $choice->increment('participants_count');
+
+            // Update component computed fields
+            $this->pariesEnCours += 1;
+            $this->totalMise += $amountCents / 100.0;
+            $this->gainsFuturs += $potential / 100.0;
+        });
+
+        // Refresh balance
+        $acc = $user->account()->first();
+        $this->balance = $acc?->balance ?? 0.0;
+    }
+
+    /**
+     * Create a new bet event from UI quick form.
+     */
+    public function createBetEvent(string $description, string $choice1, string $choice2, ?string $choice3 = null): void
+    {
+        $user = Auth::user();
+        if(!$user instanceof User){ return; }
+
+        $description = trim($description);
+        $choice1 = trim($choice1);
+        $choice2 = trim($choice2);
+        $choice3 = $choice3 !== null ? trim($choice3) : null;
+
+        if ($description === '' || $choice1 === '' || $choice2 === '') {
+            throw ValidationException::withMessages(['create' => 'Description et deux choix minimum requis.']);
+        }
+
+        DB::transaction(function () use ($description, $choice1, $choice2, $choice3) {
+            $event = BetEvent::create([
+                'title' => $description,
+                'description' => $description,
+                'status' => 'disponible',
+                'margin' => 0.90,
+                'min_bet_cents' => 100000,  // 1 000 €
+                'max_bet_cents' => 10000000, // 100 000 €
+            ]);
+
+            $choices = [
+                ['code' => 'A', 'label' => $choice1],
+                ['code' => 'B', 'label' => $choice2],
+            ];
+            if ($choice3) { $choices[] = ['code' => 'C', 'label' => $choice3]; }
+
+            foreach ($choices as $c) {
+                BetChoice::create([
+                    'bet_event_id' => $event->id,
+                    'code' => $c['code'],
+                    'label' => $c['label'],
+                    'participants_count' => 0,
+                ]);
+            }
+        });
     }
 }

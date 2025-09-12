@@ -66,6 +66,11 @@ class User extends Authenticatable
         return $this->hasMany(GameSession::class);
     }
 
+    public function bets()
+    {
+        return $this->hasMany(Bet::class);
+    }
+
     /**
      * Crédite le joueur d'un gain (en euros) et journalise une transaction.
      */
