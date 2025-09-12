@@ -95,4 +95,32 @@ class User extends Authenticatable
             ]);
         });
     }
+
+    /**
+     * Débite une mise (en euros) du solde du joueur et journalise une transaction.
+     */
+    public function bet(float $amount): void
+    {
+        $amountCents = (int) round($amount * 100);
+        if ($amountCents <= 0) {
+            return;
+        }
+
+        DB::transaction(function () use ($amountCents) {
+            $account = $this->account()->lockForUpdate()->first();
+            if (!$account) {
+                $account = $this->account()->create(['balance_cents' => 0]);
+            }
+
+            $account->balance_cents -= $amountCents;
+            $account->save();
+
+            $this->transactions()->create([
+                'type' => 'blackjack_bet',
+                'amount_cents' => -$amountCents,
+                'balance_after_cents' => $account->balance_cents,
+                'meta' => ['source' => 'blackjack'],
+            ]);
+        });
+    }
 }

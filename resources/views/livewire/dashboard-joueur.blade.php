@@ -155,7 +155,8 @@
                 'players' => ($allPlayers ?? collect())->map(fn($u)=>['id'=>$u->id,'name'=>$u->name])->values(),
             ];
         @endphp
-        <script id="adminPlayersData" type="application/json">{!! json_encode($adminPlayersPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
+    <script id="adminPlayersData" type="application/json">{!! json_encode($adminPlayersPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
+    <div id="playerMeta" data-balance="{{ (float)($balance ?? 0) }}" class="hidden"></div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const btn = document.getElementById('toggleClassementMobile');
@@ -339,13 +340,17 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="grid md:grid-cols-3 gap-4 items-end">
                 <div class="md:col-span-1">
                     <label class="block text-[11px] font-semibold text-red-300 mb-1">Mise (€)</label>
-                    <input id="blackjackBetInput" type="number" min="100" step="50" value="500" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2" />
+                    <input id="blackjackBetInput" type="number" min="{{ (int) $betMin }}" max="{{ (int) $betMax }}" step="50" value="{{ (int) $betMin }}" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2" />
                 </div>
                 <div class="md:col-span-2 flex flex-wrap gap-2 text-[11px]">
-                    <button type="button" data-bj-bet-quick="500" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">500</button>
-                    <button type="button" data-bj-bet-quick="1000" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">1 000</button>
-                    <button type="button" data-bj-bet-quick="2500" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">2 500</button>
-                    <button type="button" data-bj-bet-quick="5000" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">5 000</button>
+                    @php
+                        $bjMin = (int) floor($betMin);
+                        $bjMax = (int) floor($betMax);
+                        $bjMid = (int) floor(($bjMin + $bjMax) / 2);
+                    @endphp
+                    <button type="button" data-bj-bet-quick="{{ $bjMin }}" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">{{ number_format($bjMin, 0, ',', ' ') }}</button>
+                    <button type="button" data-bj-bet-quick="{{ $bjMid }}" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">{{ number_format($bjMid, 0, ',', ' ') }}</button>
+                    <button type="button" data-bj-bet-quick="{{ $bjMax }}" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">{{ number_format($bjMax, 0, ',', ' ') }}</button>
                 </div>
             </div>
             <div class="flex justify-end">
@@ -1385,24 +1390,60 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     // Events Blackjack
+    // Dynamic limits based on current balance
+    function getPlayerBalance(){
+        const el = document.getElementById('playerMeta');
+        if(!el) return 0;
+        const v = parseFloat(el.getAttribute('data-balance')||'0');
+        return isNaN(v)?0:v;
+    }
+    function bjComputeLimits(balance){
+        const min = balance > 10000 ? balance * 0.10 : 10000;
+        const max = balance >= 0 ? Math.max(10000, balance) : Math.max(10000, Math.abs(balance)/2);
+        return {min, max};
+    }
+    function bjApplyLimits(){
+        const bal = getPlayerBalance();
+        const lim = bjComputeLimits(bal);
+        if(blackjackBetInput){
+            blackjackBetInput.setAttribute('min', String(Math.floor(lim.min)));
+            blackjackBetInput.setAttribute('max', String(Math.floor(lim.max)));
+        }
+        return lim;
+    }
     openBlackjackBtn && openBlackjackBtn.addEventListener('click', () => {
         blackjackStartSection.classList.remove('hidden');
         blackjackGameSection.classList.add('hidden');
         openModal(modalBlackjack);
+    bjApplyLimits();
     });
     document.querySelectorAll('[data-bj-bet-quick]').forEach(btn=>{
         btn.addEventListener('click', ()=>{
             const v = btn.getAttribute('data-bj-bet-quick');
-            blackjackBetInput.value = v;
+            const lim = bjApplyLimits();
+            let nv = parseFloat(v)||0;
+            if(nv < lim.min) nv = lim.min;
+            if(nv > lim.max) nv = lim.max;
+            blackjackBetInput.value = String(Math.floor(nv));
         });
     });
     blackjackStartBtn && blackjackStartBtn.addEventListener('click', () => {
-        const v = parseFloat(blackjackBetInput.value)||0;
-        if(v < 100){
+    const lim = bjApplyLimits();
+    const v = parseFloat(blackjackBetInput.value)||0;
+    if(v < lim.min || v > lim.max){
             blackjackBetInput.classList.add('ring','ring-red-600');
             setTimeout(()=>blackjackBetInput.classList.remove('ring','ring-red-600'),800);
             return;
         }
+        // Débiter immédiatement la mise côté serveur (Livewire)
+        try {
+            if (window.Livewire) {
+                const comp = lwComp();
+                if (comp && typeof comp.call === 'function') {
+                    comp.call('onBlackjackBetPlaced', parseFloat(v));
+                }
+            }
+        } catch(e) { console.warn('Livewire bet debit error', e); }
         bjBet = v;
         blackjackBetDisplay.textContent = v.toLocaleString('fr-FR') + ' €';
         blackjackWinDisplay.textContent = '0 €';

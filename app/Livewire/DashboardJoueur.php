@@ -18,6 +18,8 @@ class DashboardJoueur extends Component
     public int $pariesEnCours = 0;
     public float $totalMise = 0.0;
     public float $gainsFuturs = 0.0;
+    public float $betMin = 0.0;
+    public float $betMax = 0.0;
 
     // Admin flags & data
     public bool $isAdmin = false;
@@ -39,6 +41,7 @@ class DashboardJoueur extends Component
 
     protected $listeners = [
         'blackjackWon' => 'onBlackjackWon',
+    'blackjackBetPlaced' => 'onBlackjackBetPlaced',
     ];
 
     public function mount(): void
@@ -54,6 +57,12 @@ class DashboardJoueur extends Component
             $account = $user->account()->create(['balance_cents' => 1000000]); // 10 000 € par défaut
         }
         $this->balance = $account->balance_cents / 100;
+
+    // Blackjack bet limits based on balance
+    $min = $this->balance > 10000 ? $this->balance * 0.10 : 10000;
+    $max = $this->balance >= 0 ? max(10000, $this->balance) : max(10000, abs($this->balance)/2);
+    $this->betMin = (float) floor($min);
+    $this->betMax = (float) floor($max);
 
         // Sessions de jeu actives
         $activeSessions = $user->gameSessions()->where('status','active');
@@ -71,6 +80,8 @@ class DashboardJoueur extends Component
         return view('livewire.dashboard-joueur', [
             'allPlayers' => $allPlayers,
             'balance' => $this->balance,
+            'betMin' => $this->betMin,
+            'betMax' => $this->betMax,
         ]);
     }
 
@@ -205,6 +216,30 @@ class DashboardJoueur extends Component
 
         // Rafraîchir solde affiché
         $account = $user->account()->first();
+        $this->balance = $account ? ($account->balance_cents / 100) : 0.0;
+    }
+
+    /**
+     * Livewire listener: débite la mise du joueur courant.
+     */
+    public function onBlackjackBetPlaced(float $amount): void
+    {
+        $user = Auth::user();
+        if(!$user instanceof User){ return; }
+        if ($amount <= 0) { return; }
+
+        // Server-side limit enforcement
+        $account = $user->account()->first();
+        $balance = $account ? ($account->balance_cents / 100) : 0.0;
+    $min = $balance > 10000 ? $balance * 0.10 : 10000;
+    $max = $balance >= 0 ? max(10000, $balance) : max(10000, abs($balance)/2);
+        if ($amount < $min || $amount > $max) {
+            // reject silently for now (UI already enforces). Could emit event/error if needed.
+            return;
+        }
+
+        $user->bet($amount);
+
         $this->balance = $account ? ($account->balance_cents / 100) : 0.0;
     }
 }
