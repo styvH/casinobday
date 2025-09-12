@@ -344,6 +344,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
             <div class="flex justify-end">
+                <button type="button" id="blackjackBet10kFixedBtn" class="mr-2 px-3 py-1 rounded bg-emerald-800/40 hover:bg-emerald-700/60 font-semibold">GO 10 000 FIXE</button>
                 <button id="blackjackStartBtn" class="px-5 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-xs md:text-sm font-bold shadow ring-1 ring-red-500/50">Démarrer</button>
             </div>
         </div>
@@ -1417,6 +1418,34 @@ document.addEventListener('DOMContentLoaded', () => {
             blackjackBetInput.value = String(Math.floor(nv));
         });
     });
+
+    // Démarrage rapide avec mise fixe 10k (ignore les limites de solde)
+    const bj10kBtn = document.getElementById('blackjackBet10kFixedBtn');
+    if(bj10kBtn){
+        bj10kBtn.addEventListener('click', () => {
+            const fixed = 10000;
+            // Débiter côté serveur via Livewire, sans contrôle client
+            try {
+                if (window.Livewire) {
+                    const comp = lwComp();
+                    if (comp && typeof comp.call === 'function') {
+                        comp.call('onBlackjackBet10kFixed');
+                    }
+                }
+            } catch(e) { console.warn('Livewire bet 10k error', e); }
+
+            // Forcer la valeur de mise en UI et démarrer la partie
+            bjBet = fixed;
+            if (blackjackBetInput) {
+                blackjackBetInput.value = String(fixed);
+            }
+            blackjackBetDisplay.textContent = fixed.toLocaleString('fr-FR') + ' €';
+            blackjackWinDisplay.textContent = '0 €';
+            blackjackStartSection.classList.add('hidden');
+            blackjackGameSection.classList.remove('hidden');
+            bjStart();
+        });
+    }
     blackjackStartBtn && blackjackStartBtn.addEventListener('click', () => {
     const lim = bjApplyLimits();
     const v = parseFloat(blackjackBetInput.value)||0;

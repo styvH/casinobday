@@ -50,13 +50,10 @@ class DashboardJoueur extends Component
         if(!$user instanceof User){
             return; // Non authentifié
         }
-    $this->isAdmin = (bool)$user->is_admin;
-        // Assure qu'un compte existe (création si inexistant)
-        $account = $user->account; // relation chargée paresseusement
-        if(!$account){
-            $account = $user->account()->create(['balance_cents' => 1000000]); // 10 000 € par défaut
-        }
-        $this->balance = $account->balance_cents / 100;
+	$this->isAdmin = (bool)$user->is_admin;
+    // Lire le solde réel du compte (en euros via l'accessor) sans créer par défaut
+    $account = $user->account()->first();
+    $this->balance = $account?->balance ?? 0.0;
 
     // Blackjack bet limits based on balance
     $min = $this->balance > 10000 ? $this->balance * 0.10 + 1 : 10000;
@@ -224,8 +221,8 @@ class DashboardJoueur extends Component
         $user->win($amount);
 
         // Rafraîchir solde affiché
-        $account = $user->account()->first();
-        $this->balance = $account ? ($account->balance_cents / 100) : 0.0;
+    $account = $user->account()->first();
+    $this->balance = $account?->balance ?? 0.0;
     }
 
     /**
@@ -239,7 +236,7 @@ class DashboardJoueur extends Component
 
         // Server-side limit enforcement
         $account = $user->account()->first();
-        $balance = $account->balance ? ($account->balance_cents / 100) : 0.0;
+        $balance = $account ? ($account->balance_cents / 100) : 0.0;
     $min = $balance > 10000 ? $balance * 0.10 : 10000;
     $max = $balance >= 0 ? max(10000, $balance) : max(10000, abs($balance)/2);
         if ($amount < $min || $amount > $max) {
@@ -247,8 +244,30 @@ class DashboardJoueur extends Component
             return;
         }
 
+    $user->bet($amount);
+
+    // Recharger le compte pour obtenir le solde à jour
+    $account = $user->account()->first();
+    $this->balance = $account?->balance ?? 0.0;
+    }
+
+    /**
+     * Place une mise FIXE de 10k € au Blackjack, en ignorant les limites liées au solde.
+     * Utilisé pour autoriser un pari spécial de 10k "peu importe son solde".
+     */
+    public function onBlackjackBet10kFixed(): void
+    {
+        $user = Auth::user();
+        if(!$user instanceof User){ return; }
+
+        // Montant fixe (en euros)
+        $amount = 10000.0;
+
+        // Débite directement sans contrôle de min/max
         $user->bet($amount);
 
-        $this->balance = $account ? ($account->balance_cents / 100) : 0.0;
+        // Rafraîchir le solde affiché
+        $account = $user->account()->first();
+        $this->balance = $account?->balance ?? 0.0;
     }
 }
