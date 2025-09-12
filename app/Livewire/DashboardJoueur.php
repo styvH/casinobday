@@ -136,42 +136,54 @@ class DashboardJoueur extends Component
     {
         $this->resetAdminMessages();
         $this->ensureAdmin();
+
         $data = $this->validate([
-            'injectionAmount' => 'required|numeric|min:0.01|max:1000000',
-            'injectionSelected' => 'array|min:1',
-            'injectionSelected.*' => 'integer|exists:users,id',
+            'injectionAmount'    => 'required|numeric',
+            'injectionSelected'  => 'array|min:1',
+            'injectionSelected.*'=> 'integer|exists:users,id',
         ]);
+
         $amountCents = (int) round($data['injectionAmount'] * 100);
-        if($amountCents <= 0){
-            $this->adminError = 'Montant invalide.';
+
+        if ($amountCents === 0) {
+            $this->adminError = 'Montant invalide (0 interdit).';
             return;
         }
+
         $players = User::whereIn('id', $data['injectionSelected'])->get();
-        if($players->isEmpty()){
+        if ($players->isEmpty()) {
             $this->adminError = 'Aucun joueur ciblé.';
             return;
         }
-        DB::transaction(function() use ($players, $amountCents) {
-            foreach($players as $player){
+
+        DB::transaction(function () use ($players, $amountCents) {
+            foreach ($players as $player) {
                 $account = $player->account;
-                if(!$account){
+                if (!$account) {
                     $account = $player->account()->create(['balance_cents' => 0]);
                 }
-                $account->balance_cents += $amountCents;
+
+                $newBalance = $account->balance_cents + $amountCents;
+
+                $account->balance_cents = $newBalance;
                 $account->save();
+
                 $player->transactions()->create([
-                    'type' => 'admin_injection',
+                    'type' => $amountCents > 0 ? 'admin_injection' : 'admin_withdrawal',
                     'amount_cents' => $amountCents,
                     'balance_after_cents' => $account->balance_cents,
-                    'meta' => ['reason' => 'injection_globale'],
+                    'meta' => ['reason' => 'admin_adjustment'],
                 ]);
             }
         });
-        $this->adminMessage = 'Injection réalisée sur '. $players->count() .' joueur(s).';
+
+        $this->adminMessage = ($amountCents > 0 ? 'Injection' : 'Retrait') . 
+                            ' réalisé(e) sur ' . $players->count() . ' joueur(s).';
         $this->injectionAmount = 0.0;
         $this->injectionSelected = [];
         $this->adminModalOpen = true;
     }
+
 
     public function adminDeletePlayer(): void
     {

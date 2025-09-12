@@ -330,7 +330,15 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="grid md:grid-cols-3 gap-4 items-end">
                 <div class="md:col-span-1">
                     <label class="block text-[11px] font-semibold text-red-300 mb-1">Mise (€)</label>
-                    <input id="blackjackBetInput" type="number" min="{{ (int) $betMin }}" max="{{ (int) $betMax }}" step="1000" value="{{ (int) $betMin }}" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2" />
+                    <input 
+                        id="blackjackBetInput" 
+                        type="number" 
+                        min="{{ (int) $betMin }}" 
+                        max="{{ (int) $betMax }}" 
+                        step="10000" 
+                        value="{{ (int) $betMin }}" 
+                        class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-3 py-2" 
+                    />
                 </div>
                 <div class="md:col-span-2 flex flex-wrap gap-2 text-[11px]">
                     @php
@@ -338,9 +346,27 @@ document.addEventListener('DOMContentLoaded', function() {
                         $bjMax = (int) floor($betMax);
                         $bjMid = (int) floor(($bjMin + $bjMax) / 2);
                     @endphp
-                    <button type="button" data-bj-bet-quick="{{ $bjMin }}" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">{{ number_format($bjMin, 0, ',', ' ') }}</button>
-                    <button type="button" data-bj-bet-quick="{{ $bjMid }}" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">{{ number_format($bjMid, 0, ',', ' ') }}</button>
-                    <button type="button" data-bj-bet-quick="{{ $bjMax }}" class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">{{ number_format($bjMax, 0, ',', ' ') }}</button>
+
+                    {{-- Bouton mise min --}}
+                    <button type="button" 
+                        data-bj-bet-quick="{{ $bjMin }}" 
+                        class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">
+                        MIN
+                    </button>
+
+                    {{-- Bouton mise mid --}}
+                    <button type="button" 
+                        data-bj-bet-quick="{{ $bjMid }}" 
+                        class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">
+                        MID
+                    </button>
+
+                    {{-- Bouton mise max (10k si solde > 0, sinon moitié dette si > 10k) --}}
+                    <button type="button" 
+                        data-bj-bet-quick="{{ $bjMax }}" 
+                        class="px-3 py-1 rounded bg-red-800/40 hover:bg-red-700/60">
+                        MAX
+                    </button>
                 </div>
             </div>
             <div class="flex justify-end">
@@ -564,7 +590,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="grid md:grid-cols-3 gap-4 items-start">
                     <div class="md:col-span-1">
                         <label class="block text-[11px] font-semibold text-red-300 mb-1">Montant (€)</label>
-                        <input wire:model.defer="injectionAmount" type="number" step="0.01" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-600" />
+                        <input wire:model.defer="injectionAmount" type="number" step="10000" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-600" />
                         @error('injectionAmount') <span class="text-[10px] text-red-400">{{ $message }}</span> @enderror
                     </div>
                     <div class="md:col-span-2" x-data wire:ignore>
@@ -1483,16 +1509,74 @@ document.addEventListener('DOMContentLoaded', () => {
         bjDealerPlay();
         bjFinish();
     });
+
+    function getPlayerBalance() {
+        const el = document.getElementById('playerMeta');
+        if (!el) return 0;
+        const v = parseFloat(el.getAttribute('data-balance') || '0');
+        return isNaN(v) ? 0 : v;
+    }
+
+    function debitMise(mise) {
+        const solde = getPlayerBalance();
+
+        // Cas spécial : pari fixe de 10k, autorisé même si solde < mise
+        if (mise === 10000) {
+            try {
+                if (window.Livewire) {
+                    const comp = lwComp();
+                    if (comp && typeof comp.call === 'function') {
+                        comp.call('onBlackjackBet10kFixed');
+                        return true;
+                    }
+                }
+            } catch (e) {
+                console.warn('Erreur débit mise 10k fixed', e);
+                return false;
+            }
+            return false;
+        }
+
+        // Cas normal : vérifier solde
+        if (mise > solde) {
+            console.warn('Solde insuffisant');
+            return false;
+        }
+
+        try {
+            if (window.Livewire) {
+                const comp = lwComp();
+                if (comp && typeof comp.call === 'function') {
+                    comp.call('onBlackjackBetPlaced', parseFloat(mise));
+                    return true;
+                }
+            }
+        } catch (e) {
+            console.warn('Erreur débit mise', e);
+            return false;
+        }
+
+        return false;
+    }
+
     blackjackRestartBtn && blackjackRestartBtn.addEventListener('click', () => {
-        if(blackjackKeepBet && blackjackKeepBet.checked){
-            // Relancer immédiatement avec même mise
-            blackjackStartSection.classList.add('hidden');
-            blackjackGameSection.classList.remove('hidden');
-            blackjackBetDisplay.textContent = bjBet.toLocaleString('fr-FR') + ' €';
-            blackjackWinDisplay.textContent = '0 €';
-            bjStart();
+        if (blackjackKeepBet && blackjackKeepBet.checked) {
+            if (debitMise(bjBet)) {
+                // Ok → on relance
+                blackjackStartSection.classList.add('hidden');
+                blackjackGameSection.classList.remove('hidden');
+                blackjackBetDisplay.textContent = bjBet.toLocaleString('fr-FR') + ' €';
+                blackjackWinDisplay.textContent = '0 €';
+                bjStart();
+            } else {
+                // Échec → retour saisie mise
+                bjFinished = true;
+                blackjackGameSection.classList.add('hidden');
+                blackjackStartSection.classList.remove('hidden');
+                blackjackBetInput.value = bjBet.toString();
+                blackjackBetInput.focus();
+            }
         } else {
-            // Revenir à l'écran de mise pour ressaisir un montant
             bjFinished = true;
             blackjackGameSection.classList.add('hidden');
             blackjackStartSection.classList.remove('hidden');
