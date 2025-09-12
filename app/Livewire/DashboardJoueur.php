@@ -144,7 +144,6 @@ class DashboardJoueur extends Component
         ]);
 
         $amountCents = (int) round($data['injectionAmount'] * 100);
-
         if ($amountCents === 0) {
             $this->adminError = 'Montant invalide (0 interdit).';
             return;
@@ -177,7 +176,14 @@ class DashboardJoueur extends Component
             }
         });
 
-        $this->adminMessage = ($amountCents > 0 ? 'Injection' : 'Retrait') . 
+        // 🔄 rafraîchir le solde de l’admin connecté
+        $current = Auth::user();
+        if ($current) {
+            $account = $current->account()->first();
+            $this->balance = $account?->balance ?? 0.0;
+        }
+
+        $this->adminMessage = ($amountCents > 0 ? 'Injection' : 'Retrait') .
                             ' réalisé(e) sur ' . $players->count() . ' joueur(s).';
         $this->injectionAmount = 0.0;
         $this->injectionSelected = [];
