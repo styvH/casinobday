@@ -21,23 +21,10 @@
     opacity: 1;
 }
 </style>
-@php /* Les anciennes valeurs fictives ont été remplacées par des propriétés Livewire dynamiques */ @endphp
+@php /* Les anciennes valeurs fictives ont été remplacées par des données réelles */ @endphp
 
 <div class="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-red-900 via-black to-red-700 text-white">
-@php
-    // Données fictives pour le classement
-    $classementJoueurs = [];
-    for ($i = 1; $i <= 50; $i++) {
-        $classementJoueurs[] = [
-            'pseudo' => 'Joueur' . $i,
-            'points' => rand(1000, 20000)
-        ];
-    }
-    // Tri décroissant par points
-    usort($classementJoueurs, function($a, $b) {
-        return $b['points'] <=> $a['points'];
-    });
-@endphp
+@php /* Le composant Livewire fournit $leaderboard: top 50 users triés par solde */ @endphp
 
     <!-- Bouton mobile afficher classement -->
     <button id="toggleClassementMobile" class="md:hidden fixed bottom-4 right-4 z-50 bg-red-700 hover:bg-red-800 text-white font-semibold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
@@ -50,8 +37,9 @@
                 <span class="text-xl font-bold text-red-400">🏆 Classement Top 50</span>
             </div>
             <ul class="px-6 py-2">
-                @foreach($classementJoueurs as $index => $joueur)
+                @foreach(($leaderboard ?? collect()) as $index => $u)
                     @if($index < 10)
+                        @php $lb_balance = ((int)($u->balance_cents ?? 0)) / 100; @endphp
                         <li class="flex items-center justify-between mb-2 p-2 rounded-lg transition
                             @if($index == 0) bg-yellow-400 bg-opacity-30 font-extrabold @elseif($index == 1) bg-gray-300 bg-opacity-30 font-bold @elseif($index == 2) bg-orange-400 bg-opacity-30 font-bold @elseif($index < 10) bg-red-900 bg-opacity-40 font-semibold text-white border border-red-700 @endif
                             @if($index < 3) shadow-lg @endif
@@ -65,9 +53,9 @@
                                 @elseif($index == 2)
                                     <span class="text-2xl">🥉</span>
                                 @endif
-                                <span>{{ $joueur['pseudo'] }}</span>
+                                <span>{{ $u->name }}</span>
                             </div>
-                            <span class="font-mono">{{ number_format($joueur['points'], 0, ',', ' ') }} pts</span>
+                            <span class="font-mono">{{ number_format($lb_balance, 0, ',', ' ') }} €</span>
                         </li>
                     @endif
                 @endforeach
@@ -75,14 +63,15 @@
             <details class="px-6 py-2">
                 <summary class="cursor-pointer text-red-400 hover:underline">Voir le reste du classement</summary>
                 <ul class="mt-2">
-                    @foreach($classementJoueurs as $index => $joueur)
+                    @foreach(($leaderboard ?? collect()) as $index => $u)
                         @if($index >= 10)
+                            @php $lb_balance = ((int)($u->balance_cents ?? 0)) / 100; @endphp
                             <li class="flex items-center justify-between mb-1 p-1 rounded transition bg-black bg-opacity-30 text-gray-300">
                                 <div class="flex items-center gap-2">
                                     <span class="text-sm font-bold">{{ $index+1 }}</span>
-                                    <span>{{ $joueur['pseudo'] }}</span>
+                                    <span>{{ $u->name }}</span>
                                 </div>
-                                <span class="font-mono text-xs">{{ number_format($joueur['points'], 0, ',', ' ') }} pts</span>
+                                <span class="font-mono text-xs">{{ number_format($lb_balance, 0, ',', ' ') }} €</span>
                             </li>
                         @endif
                     @endforeach
@@ -104,6 +93,7 @@
         <div class="flex flex-col items-center mb-6 md:mb-8">
             <div class="text-xl md:text-2xl font-semibold mb-1 md:mb-2">Solde du compte</div>
             <div class="flex items-center gap-3 mb-3 md:mb-4">
+                
                 <div class="text-3xl md:text-5xl font-extrabold text-red-400">{{ number_format($balance, 0, ',', ' ') }} €</div>
                 <button id="openDonationBtn" class="group relative text-xs md:text-sm px-3 py-2 md:py-2 bg-gradient-to-r from-red-800 to-red-600 hover:from-red-700 hover:to-red-500 rounded-lg font-semibold shadow ring-1 ring-red-500/60 hover:ring-red-300 transition overflow-hidden">
                     <span class="relative z-10 flex items-center gap-1">

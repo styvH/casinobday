@@ -77,11 +77,20 @@ class DashboardJoueur extends Component
         if($this->isAdmin){
             $allPlayers = User::orderBy('name')->select('id','name')->get();
         }
+        // Classement des joueurs par solde (balance_cents) décroissant
+        $leaderboard = User::query()
+            ->leftJoin('user_accounts', 'user_accounts.user_id', '=', 'users.id')
+            ->select('users.id', 'users.name', DB::raw('COALESCE(user_accounts.balance_cents, 0) as balance_cents'))
+            ->orderByDesc('balance_cents')
+            ->orderBy('users.name')
+            ->limit(50)
+            ->get();
         return view('livewire.dashboard-joueur', [
             'allPlayers' => $allPlayers,
             'balance' => $this->balance,
             'betMin' => $this->betMin,
             'betMax' => $this->betMax,
+            'leaderboard' => $leaderboard,
         ]);
     }
 
@@ -230,7 +239,7 @@ class DashboardJoueur extends Component
 
         // Server-side limit enforcement
         $account = $user->account()->first();
-        $balance = $account ? ($account->balance_cents / 100) : 0.0;
+        $balance = $account->balance ? ($account->balance_cents / 100) : 0.0;
     $min = $balance > 10000 ? $balance * 0.10 : 10000;
     $max = $balance >= 0 ? max(10000, $balance) : max(10000, abs($balance)/2);
         if ($amount < $min || $amount > $max) {
