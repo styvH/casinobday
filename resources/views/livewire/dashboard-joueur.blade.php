@@ -119,8 +119,8 @@
             <div class="text-xl md:text-2xl font-semibold mb-1 md:mb-2">Solde du compte</div>
             <div class="flex items-center gap-3 mb-3 md:mb-4">
                 
-                <div class="text-3xl md:text-5xl font-extrabold text-red-400">{{ number_format($balance, 0, ',', ' ') }} €</div>
-                <button id="openDonationBtn" class="group relative text-xs md:text-sm px-3 py-2 md:py-2 bg-gradient-to-r from-red-800 to-red-600 hover:from-red-700 hover:to-red-500 rounded-lg font-semibold shadow ring-1 ring-red-500/60 hover:ring-red-300 transition overflow-hidden">
+                <div id="displayBalance" class="text-3xl md:text-5xl font-extrabold text-red-400">{{ number_format($balance, 0, ',', ' ') }} €</div>
+                <button id="openDonationBtn" class="group relative text-xs md:text-sm px-3 py-2 md:py-2 bg-gradient-to-r from-red-800 to-red-600 hover:from-red-700 hover:to-red-500 rounded-lg font-semibold shadow ring-1 ring-red-500/60 hover:ring-red-300 transition overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed" @if(($balance ?? 0) < 10000) disabled @endif>
                     <span class="relative z-10 flex items-center gap-1">
                         💝 <span>Faire un don</span>
                     </span>
@@ -201,7 +201,8 @@
             ];
         })->values();
     @endphp
-        <script id="adminPlayersData" type="application/json">{!! json_encode($adminPlayersPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
+    <script id="adminPlayersData" type="application/json">{!! json_encode($adminPlayersPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
+    <script id="donationPlayersData" type="application/json">{!! json_encode(($donationPlayers ?? collect())->map(fn($u)=>['id'=>$u->id,'pseudo'=>$u->name])->values(), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
         <script id="betData" type="application/json">{!! json_encode(['events' => $betEventsPayload, 'activeBets' => $userBetsPayload], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
         @if(($houseStats ?? null))
         <script id="houseStatsData" type="application/json">{!! json_encode([
@@ -223,7 +224,7 @@
             })->values();
         @endphp
         <script id="historyData" type="application/json">{!! json_encode($historyPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
-    <div id="playerMeta" data-balance="{{ (float)($balance ?? 0) }}" class="hidden"></div>
+    <div id="playerMeta" data-balance="{{ (float)($balance ?? 0) }}" data-lw-id="{{ $_instance->id ?? '' }}" class="hidden"></div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const btn = document.getElementById('toggleClassementMobile');
@@ -572,7 +573,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <button data-close="modalDonation" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
     </div>
     <div class="p-6 space-y-6 overflow-y-auto classement-scrollbar text-sm">
-        <p class="text-xs text-gray-400 leading-relaxed">Transférez une somme fictive à un joueur. Aucune transaction réelle. Les montants sont simulés.</p>
+    <p class="text-xs text-gray-400 leading-relaxed">Transférez une somme à un joueur (minimum 10 000 €, uniquement positif, pas plus que votre solde). Indisponible si votre solde est &lt; 10 000 €.</p>
 
         <div class="space-y-3">
             <label class="block text-xs font-semibold text-red-300">Destinataire</label>
@@ -587,13 +588,14 @@ document.addEventListener('DOMContentLoaded', function() {
             <label class="block text-xs font-semibold text-red-300">Montant (€)</label>
             <div class="grid grid-cols-3 gap-3 items-end">
                 <div class="col-span-2">
-                    <input id="donationAmount" type="number" min="1" step="50" value="500" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-4 py-2 text-sm" />
+                    <input id="donationAmount" type="number" min="10000" step="100" value="10000" max="{{ (int) ($balance ?? 0) }}" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-4 py-2 text-sm" />
                 </div>
                 <div class="flex flex-wrap gap-2 justify-end text-[10px]">
-                    <button type="button" data-don-quick="500" class="px-2 py-1 rounded bg-red-800/40 hover:bg-red-700/60">500</button>
-                    <button type="button" data-don-quick="1000" class="px-2 py-1 rounded bg-red-800/40 hover:bg-red-700/60">1 000</button>
-                    <button type="button" data-don-quick="2500" class="px-2 py-1 rounded bg-red-800/40 hover:bg-red-700/60">2 500</button>
-                    <button type="button" data-don-quick="5000" class="px-2 py-1 rounded bg-red-800/40 hover:bg-red-700/60">5 000</button>
+                    <button type="button" data-don-quick="10000" class="px-2 py-1 rounded bg-red-800/40 hover:bg-red-700/60">10 000</button>
+                    <button type="button" data-don-quick="25000" class="px-2 py-1 rounded bg-red-800/40 hover:bg-red-700/60">25 000</button>
+                    <button type="button" data-don-quick="50000" class="px-2 py-1 rounded bg-red-800/40 hover:bg-red-700/60">50 000</button>
+                    <button type="button" data-don-quick="100000" class="px-2 py-1 rounded bg-red-800/40 hover:bg-red-700/60">100 000</button>
+                     <button type="button" data-don-quick="1000000" class="px-2 py-1 rounded bg-red-800/40 hover:bg-red-700/60">1 000 000</button>
                 </div>
             </div>
             <div class="flex items-center gap-3 text-[11px] text-gray-400">
@@ -601,9 +603,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <span>Net reçu: <span id="donationNet" class="text-emerald-400 font-semibold">0 €</span></span>
             </div>
         </div>
-
-        <div class="bg-red-900/20 border border-red-800/40 rounded-lg p-4 text-[11px] text-gray-300 leading-relaxed">
-            Simulation d'interface. Les dons sont ajoutés à l'historique local comme transaction.
+        <div id="donationInfo" class="bg-red-900/20 border border-red-800/40 rounded-lg p-4 text-[11px] text-gray-300 leading-relaxed">
+            Aucun frais réel. Le transfert est immédiat.
         </div>
         <div id="donationError" class="text-[11px] text-red-400 font-semibold hidden"></div>
     </div>
@@ -1205,8 +1206,9 @@ document.addEventListener('DOMContentLoaded', () => {
         inscriptionTotalPotentiel.textContent = (mise * joueurs).toLocaleString('fr-FR') + ' €';
     }
 
-    // Données fictives pour recherche joueurs et arbitres
-    const poolUtilisateurs = Array.from({length: 40}).map((_,i)=>({id:i+1,pseudo:'Joueur'+(i+1)}));
+    // Données réelles pour dons: fournies par le backend
+    const donationPlayersEl = document.getElementById('donationPlayersData');
+    const poolUtilisateurs = donationPlayersEl ? JSON.parse(donationPlayersEl.textContent||'[]') : [];
     let joueursSelectionnes = [];
     let arbitre = null;
     // Blackjack state
@@ -1373,18 +1375,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let donationRecipient = null;
 
     openDonationBtn && openDonationBtn.addEventListener('click', () => {
+        const metaEl = document.getElementById('playerMeta');
+        const currentBalance = parseFloat(metaEl?.dataset?.balance || '0');
+        if(currentBalance < 10000){ return; }
         donationRecipient = null;
         donationRecipientContainer.innerHTML = '<span class="text-[11px] text-gray-500">Aucun destinataire sélectionné</span>';
         donationSearchJoueur.value='';
-        donationAmount.value = '500';
+        donationAmount.min = '10000';
+        donationAmount.max = String(Math.floor(currentBalance));
+        donationAmount.value = '10000';
         updateDonationComputed();
         openModal(modalDonation);
     });
 
     function updateDonationComputed(){
         const val = parseFloat(donationAmount.value)||0;
-        const fees = Math.round(val * 0.02); // 2% frais fictifs
-        const net = Math.max(0, val - fees);
+    const fees = 0;
+    const net = Math.max(0, val - fees);
         donationFees.textContent = fees.toLocaleString('fr-FR') + ' €';
         donationNet.textContent = net.toLocaleString('fr-FR') + ' €';
     }
@@ -1430,13 +1437,74 @@ document.addEventListener('DOMContentLoaded', () => {
         if(!donationError) return; if(!msg){ donationError.classList.add('hidden'); donationError.textContent=''; return; }
         donationError.textContent = msg; donationError.classList.remove('hidden');
     }
+    const __lwId = document.getElementById('playerMeta')?.dataset?.lwId || '';
     confirmDonationBtn && confirmDonationBtn.addEventListener('click', () => {
         setDonationError('');
         const amount = parseFloat(donationAmount.value)||0;
         if(!donationRecipient){ return setDonationError('Sélectionnez un destinataire'); }
         if(amount <= 0){ return setDonationError('Montant invalide'); }
-        alert('(Démo) Don envoyé à '+donationRecipient.pseudo+' de '+amount.toLocaleString('fr-FR')+' €');
+        if(amount < 10000){ return setDonationError('Montant minimum: 10 000 €'); }
+        const metaEl = document.getElementById('playerMeta');
+        const currentBalance = parseFloat(metaEl?.dataset?.balance || '0');
+        if(currentBalance < 10000){ return setDonationError('Indisponible: votre solde est < 10 000 €'); }
+        if(amount > currentBalance){ return setDonationError('Montant supérieur à votre solde'); }
+        // Appel Livewire
+        if(window.Livewire){
+            let comp = null;
+            if(__lwId){ comp = window.Livewire.find(__lwId); }
+            if(!comp){
+                const el = document.querySelector('[wire\\:id]');
+                if(el){ comp = window.Livewire.find(el.getAttribute('wire:id')); }
+            }
+            if(comp){
+                comp.call('donate', parseInt(donationRecipient.id), amount, 'don');
+            } else {
+                setDonationError('Composant Livewire introuvable.');
+            }
+        } else {
+            setDonationError('Livewire non chargé.');
+        }
+    });
+
+    // Feedback Livewire pour donation
+    window.addEventListener('donation-error', (e)=>{
+        setDonationError(e?.detail?.message || 'Erreur lors du don');
+    });
+    window.addEventListener('donation-success', (e)=>{
+        // Mettre à jour le solde affiché et meta
+        const amt = parseFloat(e?.detail?.amount||0);
+        const display = document.getElementById('displayBalance');
+        const meta = document.getElementById('playerMeta');
+        if(meta){
+            const bal = Math.max(0, (parseFloat(meta.dataset.balance||'0') - amt));
+            meta.dataset.balance = String(bal);
+            if(display){ display.textContent = bal.toLocaleString('fr-FR') + ' €'; }
+            const openBtn = document.getElementById('openDonationBtn');
+            if(openBtn){ openBtn.disabled = bal < 10000; }
+        }
+        // Fermer le modal
         closeModal(modalDonation);
+    });
+
+    // Feedback Livewire
+    document.addEventListener('livewire:initialized', () => {
+        const inst = __lwId ? window.Livewire.find(__lwId) : null;
+        if(!inst) return;
+        inst.on('donation-error', (e)=>{
+            setDonationError(e?.message || 'Erreur de donation');
+        });
+        inst.on('donation-success', (e)=>{
+            // maj solde méta
+            const metaEl = document.getElementById('playerMeta');
+            if(metaEl && e?.newBalance !== undefined){
+                metaEl.dataset.balance = String(e.newBalance);
+                const disp = document.getElementById('displayBalance');
+                if(disp){ disp.textContent = Number(e.newBalance).toLocaleString('fr-FR') + ' €'; }
+                // disable donate if now < 10k
+                if(openDonationBtn){ openDonationBtn.disabled = (Number(e.newBalance) < 10000); }
+            }
+            closeModal(modalDonation);
+        });
     });
 
     function bjCreateDeck(){

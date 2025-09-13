@@ -42,6 +42,13 @@ class DashboardJoueur extends Component
 
     public string $adminMessage = '';
     public string $adminError = '';
+
+    // Player: donation form
+    public ?int $donationRecipientId = null;
+    public float $donationAmount = 10000.0;
+    public string $donationMessage = '';
+    public string $donationError = '';
+
     // Admin: delete player
     public ?int $deletePlayerId = null;
 
@@ -82,6 +89,15 @@ class DashboardJoueur extends Component
         $allPlayers = collect();
         if($this->isAdmin){
             $allPlayers = User::orderBy('name')->select('id','name')->get();
+        }
+        // Liste des destinataires possibles pour don (tous sauf l'utilisateur courant)
+        $donationPlayers = collect();
+        $current = Auth::user();
+        if ($current instanceof User) {
+            $donationPlayers = User::where('id', '!=', $current->id)
+                ->orderBy('name')
+                ->select('id','name')
+                ->get();
         }
         // Classement des joueurs par solde (balance_cents) décroissant
         $leaderboard = User::query()
@@ -223,6 +239,7 @@ class DashboardJoueur extends Component
             'userActiveBets' => $userActiveBets,
             'houseStats' => $houseStats,
             'historyItems' => $historyItems,
+            'donationPlayers' => $donationPlayers,
         ]);
     }
 
@@ -594,6 +611,90 @@ class DashboardJoueur extends Component
         $acc = $user->account()->first();
         $this->balance = $acc?->balance ?? 0.0;
         $this->gainsFuturs = (float) (Bet::where('user_id', $user->id)->where('status','open')->sum('potential_win_cents') / 100);
+    }
+
+    /**
+     * Transfert d'argent vers un autre joueur (don).
+     * Montant en euros. Min = 10 000 €, Max = solde courant. Pas de don à soi-même.
+     */
+    public function donate(int $recipientId, float $amount, string $message = ''): void
+    {
+        $donor = Auth::user();
+        if(!$donor instanceof User){
+            $this->dispatch('donation-error', message: 'Veuillez vous connecter.');
+            return;
+        }
+
+        if ($recipientId === $donor->id) {
+            $this->dispatch('donation-error', message: 'Impossible de vous envoyer un don.');
+            return;
+        }
+
+        $recipient = User::find($recipientId);
+        if(!$recipient){
+            $this->dispatch('donation-error', message: 'Destinataire introuvable.');
+            return;
+        }
+
+        // Règles
+        $amount = (float) $amount;
+        $amountCents = (int) round($amount * 100);
+        $minCents = 10000 * 100; // 10 000 €
+        if ($amountCents < $minCents) {
+            $this->dispatch('donation-error', message: 'Montant minimum 10 000 €.');
+            return;
+        }
+
+        try {
+            DB::transaction(function () use ($donor, $recipient, $amountCents, $message) {
+                // Charger et verrouiller comptes
+                $donorAccount = $donor->account()->lockForUpdate()->first();
+                if (!$donorAccount) { $donorAccount = $donor->account()->create(['balance_cents' => 0]); }
+                $recipientAccount = $recipient->account()->lockForUpdate()->first();
+                if (!$recipientAccount) { $recipientAccount = $recipient->account()->create(['balance_cents' => 0]); }
+
+                if ($donorAccount->balance_cents < $amountCents) {
+                    throw new \RuntimeException('Solde insuffisant.');
+                }
+
+                // Débit donateur
+                $donorAccount->balance_cents -= $amountCents;
+                $donorAccount->save();
+                $donor->transactions()->create([
+                    'type' => 'transfer_out',
+                    'amount_cents' => -$amountCents,
+                    'balance_after_cents' => $donorAccount->balance_cents,
+                    'meta' => [
+                        'to_user_id' => $recipient->id,
+                        'to_user_name' => $recipient->name,
+                        'message' => $message,
+                    ],
+                ]);
+
+                // Crédit destinataire
+                $recipientAccount->balance_cents += $amountCents;
+                $recipientAccount->save();
+                $recipient->transactions()->create([
+                    'type' => 'transfer_in',
+                    'amount_cents' => $amountCents,
+                    'balance_after_cents' => $recipientAccount->balance_cents,
+                    'meta' => [
+                        'from_user_id' => $donor->id,
+                        'from_user_name' => $donor->name,
+                        'message' => $message,
+                    ],
+                ]);
+            });
+        } catch (\Throwable $e) {
+            $this->dispatch('donation-error', message: $e->getMessage() ?: 'Erreur lors du transfert.');
+            return;
+        }
+
+        // Rafraîchir solde et infos
+        $acc = $donor->account()->first();
+        $this->balance = $acc?->balance ?? 0.0;
+
+        $this->dispatch('donation-success', amount: $amount, recipientId: $recipient->id, recipientName: $recipient->name);
     }
 
     /**
