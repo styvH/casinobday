@@ -20,9 +20,13 @@ Route::get('/', HomePage::class)->name('home');
 use App\Livewire\DashboardJoueur;
 use App\Livewire\BetMaster;
 use App\Livewire\Auth\CheckIn;
+use App\Livewire\Auth\ForgotPassword;
+use App\Livewire\Auth\ResetPassword;
 use Illuminate\Support\Facades\Auth;
 
 Route::get('/check-in', CheckIn::class)->name('login');
+Route::get('/forgot-password', ForgotPassword::class)->name('password.request');
+Route::get('/reset-password/{token}', ResetPassword::class)->name('password.reset');
 
 Route::middleware(['auth'])->group(function(){
 	Route::get('/player/dashboard', DashboardJoueur::class)->name('dashboard.joueur');

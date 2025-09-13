@@ -9,6 +9,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Facades\DB;
 use App\Models\HouseAccount;
+use App\Notifications\CustomResetPassword;
 
 /**
  * @property-read UserAccount|null $account
@@ -70,6 +71,14 @@ class User extends Authenticatable
     public function bets()
     {
         return $this->hasMany(Bet::class);
+    }
+
+    /**
+     * Send the password reset notification.
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new CustomResetPassword($token));
     }
 
     /**

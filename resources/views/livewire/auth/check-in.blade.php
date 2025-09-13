@@ -17,7 +17,7 @@
                     <input type="checkbox" wire:model="remember" class="h-4 w-4 rounded border-red-700 bg-black/60 text-red-600 focus:ring-red-600" />
                     <span>Se souvenir</span>
                 </label>
-                <span class="text-gray-500 italic">Enregistrement désactivé</span>
+                <a href="{{ route('password.request') }}" class="text-gray-300 hover:text-white">Mot de passe oublié ?</a>
             </div>
             <button type="submit" class="w-full py-2.5 bg-red-700 hover:bg-red-800 rounded-lg font-semibold shadow ring-1 ring-red-600/50 transition">Se connecter</button>
         </form>

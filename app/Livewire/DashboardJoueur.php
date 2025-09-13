@@ -18,6 +18,8 @@ use App\Models\RewardCycle;
 use App\Models\TopTenGrantSetting;
 use App\Models\RewardConfig;
 use App\Services\RewardService;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\WelcomeMail;
 
 class DashboardJoueur extends Component
 {
@@ -327,6 +329,14 @@ class DashboardJoueur extends Component
                 'meta' => ['source' => 'admin_create'],
             ]);
         });
+        try {
+            $createdUser = User::where('email', $data['newPlayerEmail'])->first();
+            if ($createdUser) {
+                Mail::to($createdUser->email)->send(new WelcomeMail($createdUser));
+            }
+        } catch (\Throwable $e) {
+            // ne pas interrompre le flux admin si le mail échoue
+        }
         $this->adminMessage = 'Joueur créé avec succès.';
         $this->reset(['newPlayerName','newPlayerEmail','newPlayerPassword']);
         $this->newPlayerBalance = 1000.0;
