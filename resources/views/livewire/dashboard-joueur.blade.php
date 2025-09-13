@@ -162,14 +162,10 @@
                 </div>
             </div>
         </div>
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8 mb-6 md:mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8 mb-6 md:mb-8">
             <button id="openPariModalBtn" class="px-4 md:px-6 py-3 md:py-4 bg-red-700 hover:bg-red-900 text-white font-bold rounded-xl shadow-lg transition flex flex-col items-center text-sm md:text-base">
                 <span class="text-xl md:text-2xl mb-1 md:mb-2">🎲</span>
                 Lancer un pari
-            </button>
-            <button id="openInscriptionPhysiqueBtn" class="px-4 md:px-6 py-3 md:py-4 bg-black hover:bg-red-800 text-white font-bold rounded-xl shadow-lg border border-red-700 transition flex flex-col items-center text-sm md:text-base">
-                <span class="text-xl md:text-2xl mb-1 md:mb-2">📝</span>
-                Inscription partie physique
             </button>
             <button id="openHistoryBtn" class="px-4 md:px-6 py-3 md:py-4 bg-red-900 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition flex flex-col items-center text-sm md:text-base">
                 <span class="text-xl md:text-2xl mb-1 md:mb-2">📜</span>
