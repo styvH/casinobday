@@ -79,6 +79,27 @@
             </details>
         </div>
     </div>
+    @if(($houseStats ?? null))
+    <div id="housePanel" class="hidden md:flex fixed top-1/2 left-1/2 md:left-8 z-50 transform -translate-y-1/2 -translate-x-1/2 md:translate-x-0 items-center w-11/12 md:w-auto">
+        <div class="bg-black bg-opacity-80 border-r-4 border-emerald-800 rounded-xl md:rounded-r-xl shadow-xl w-full md:w-80 max-h-[50vh] overflow-hidden flex flex-col">
+            <div class="px-6 py-4 flex items-center justify-center">
+                <span class="text-xl font-bold text-emerald-400">🏦 Maison</span>
+            </div>
+            @php
+                $houseStarting = (int)(($houseStats['starting'] ?? 0) / 100);
+                $houseBalance = (int)(($houseStats['balance'] ?? 0) / 100);
+                $houseDelta = (int)(($houseStats['delta'] ?? 0) / 100);
+            @endphp
+            <ul class="px-6 pb-4 space-y-2 text-sm">
+                <li class="flex justify-between"><span class="text-gray-300">Capital initial</span><span class="font-mono">{{ number_format($houseStarting, 0, ',', ' ') }} €</span></li>
+                <li class="flex justify-between"><span class="text-gray-300">Solde actuel</span><span class="font-mono">{{ number_format($houseBalance, 0, ',', ' ') }} €</span></li>
+                <li class="flex justify-between"><span class="text-gray-300">P/L</span>
+                    <span class="font-mono {{ $houseDelta >= 0 ? 'text-green-400' : 'text-red-400' }}">{{ number_format($houseDelta, 0, ',', ' ') }} €</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+    @endif
     <main class="relative w-full max-w-3xl bg-black bg-opacity-80 rounded-xl shadow-lg p-4 md:p-8 border-4 border-red-800 mt-20 md:mt-0">
         <!-- Bouton Paramètres icône seule -->
         <div class="absolute top-2 right-2 md:top-3 md:right-3 flex items-center gap-2">
@@ -174,6 +195,13 @@
         @endphp
         <script id="adminPlayersData" type="application/json">{!! json_encode($adminPlayersPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
         <script id="betData" type="application/json">{!! json_encode(['events' => $betEventsPayload, 'activeBets' => $userBetsPayload], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
+        @if(($houseStats ?? null))
+        <script id="houseStatsData" type="application/json">{!! json_encode([
+            'starting' => (int) ($houseStats['starting'] ?? 0),
+            'balance' => (int) ($houseStats['balance'] ?? 0),
+            'delta' => (int) ($houseStats['delta'] ?? 0),
+        ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
+        @endif
     <div id="playerMeta" data-balance="{{ (float)($balance ?? 0) }}" class="hidden"></div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {

@@ -13,6 +13,7 @@ use Illuminate\Validation\ValidationException;
 use App\Models\BetEvent;
 use App\Models\BetChoice;
 use App\Models\Bet;
+use App\Models\HouseAccount;
 
 class DashboardJoueur extends Component
 {
@@ -101,6 +102,17 @@ class DashboardJoueur extends Component
                 ->where('status','open')
                 ->latest()->limit(50)->get();
         }
+        // House stats
+        $house = HouseAccount::first();
+        $houseStats = null;
+        if ($house) {
+            $houseStats = [
+                'starting' => (int) $house->starting_balance_cents,
+                'balance' => (int) $house->balance_cents,
+                'delta' => (int) ($house->balance_cents - $house->starting_balance_cents),
+            ];
+        }
+
         return view('livewire.dashboard-joueur', [
             'allPlayers' => $allPlayers,
             'balance' => $this->balance,
@@ -109,6 +121,7 @@ class DashboardJoueur extends Component
             'leaderboard' => $leaderboard,
             'betEvents' => $betEvents,
             'userActiveBets' => $userActiveBets,
+            'houseStats' => $houseStats,
         ]);
     }
 
@@ -372,6 +385,17 @@ class DashboardJoueur extends Component
 
             // Increment participants on the chosen choice
             $choice->increment('participants_count');
+
+            // House commission: (1 - margin) of the stake
+            $commission = (int) round($amountCents * (1 - (float) $event->margin));
+            if ($commission > 0) {
+                $house = HouseAccount::singleton();
+                $house->credit('bet_commission_in', $commission, [
+                    'bet_event_id' => $event->id,
+                    'bet_id' => $bet->id,
+                    'user_id' => $user->id,
+                ]);
+            }
 
             // Update component computed fields
             $this->pariesEnCours += 1;

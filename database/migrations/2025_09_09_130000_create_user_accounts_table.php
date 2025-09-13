@@ -13,6 +13,8 @@ return new class extends Migration
             $table->foreignId('user_id')->unique()->constrained()->cascadeOnDelete();
             // Store balance in cents to avoid float issues. 10 000 € default => 1 000 000 cents
             $table->bigInteger('balance_cents')->default(1000000);
+            // Track player's debt to the house (positive means owes money)
+            $table->bigInteger('debt_cents')->default(0);
             $table->timestamps();
         });
     }

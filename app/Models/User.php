@@ -8,6 +8,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Facades\DB;
+use App\Models\HouseAccount;
 
 /**
  * @property-read UserAccount|null $account
@@ -98,6 +99,12 @@ class User extends Authenticatable
                 'balance_after_cents' => $account->balance_cents,
                 'meta' => ['source' => 'blackjack'],
             ]);
+
+            // House pays out when player wins in blackjack
+            $house = HouseAccount::singleton();
+            $house->debit('blackjack_payout_out', $amountCents, [
+                'user_id' => $this->id,
+            ]);
         });
     }
 
@@ -125,6 +132,12 @@ class User extends Authenticatable
                 'amount_cents' => -$amountCents,
                 'balance_after_cents' => $account->balance_cents,
                 'meta' => ['source' => 'blackjack'],
+            ]);
+
+            // House collects stake in blackjack immediately
+            $house = HouseAccount::singleton();
+            $house->credit('blackjack_bet_in', $amountCents, [
+                'user_id' => $this->id,
             ]);
         });
     }

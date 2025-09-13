@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
         // Optionally seed an admin via AdminUserSeeder
         $this->call([
             AdminUserSeeder::class,
+            HouseSeeder::class,
             BetSeeder::class,
         ]);
     }
