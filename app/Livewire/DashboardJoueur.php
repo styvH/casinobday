@@ -389,8 +389,8 @@ class DashboardJoueur extends Component
             return;
         }
 
-        try {
-        DB::transaction(function () use ($user, $event, $choice, $amountCents) {
+    try {
+    DB::transaction(function () use ($user, $event, $choice, $amountCents) {
             // Combined odds formula with commission 10% (fixed)
             $commission = 0.10;
             $totalParticipants = max(1, (int) $event->choices->sum('participants_count'));
@@ -449,12 +449,47 @@ class DashboardJoueur extends Component
                 'user_id' => $user->id,
             ]);
 
-            // Update component computed fields
+            // Recalculate dynamic odds for ALL open bets of this event (continuous future gain)
+            $event->load('choices');
+            // Recompute stake sums per choice (includes the newly created bet)
+            $choiceIds = $event->choices->pluck('id');
+            $sums = Bet::query()
+                ->select('bet_choice_id', DB::raw('SUM(amount_cents) as sum_amount'))
+                ->where('status','open')
+                ->whereIn('bet_choice_id', $choiceIds)
+                ->groupBy('bet_choice_id')
+                ->pluck('sum_amount','bet_choice_id');
+            // Participants per choice come from choices table
+            $totalParticipants = max(1, (int) $event->choices->sum('participants_count'));
+            $commission = 0.10;
+            // Build odds map per choice id
+            $oddsMap = [];
+            foreach ($event->choices as $c) {
+                $miseChoix = max(1, (int) ($sums[$c->id] ?? 0));
+                $totalMises = max(1, (int) $sums->sum());
+                $joueursChoix = max(1, (int) $c->participants_count);
+                $oddsVal = ($totalMises / $miseChoix) * ($totalParticipants / $joueursChoix) * (1.0 - $commission);
+                if ($oddsVal < 1.20) $oddsVal = 1.20; if ($oddsVal > 50.0) $oddsVal = 50.0;
+                $oddsMap[$c->id] = $oddsVal;
+            }
+            // Update potential_win_cents for all open bets on this event
+            $openBetsForEvent = Bet::where('bet_event_id', $event->id)->where('status','open')->lockForUpdate()->get();
+            foreach ($openBetsForEvent as $ob) {
+                $o = (float) ($oddsMap[$ob->bet_choice_id] ?? 1.20);
+                $ob->potential_win_cents = (int) round($ob->amount_cents * $o);
+                // Optionally keep latest indicative odds on bet (not used for payout)
+                $ob->odds = $o;
+                $ob->save();
+            }
+
+            // Update component computed fields (will be refreshed again after TX)
             $this->pariesEnCours += 1;
             $this->totalMise += $amountCents / 100.0;
-            $this->gainsFuturs += $potential / 100.0;
+            // Don't trust previous $potential; we've just recalculated potentials for all bets
+            // We'll recompute gainsFuturs after transaction for accuracy
 
-            // Notifier le front: pari enregistré (événement navigateur)
+            // Rafraîchir le bet après recalcul pour envoyer les valeurs mises à jour
+            $bet->refresh();
             $this->dispatch(
                 'bet-placed',
                 betId: $bet->id,
@@ -462,8 +497,8 @@ class DashboardJoueur extends Component
                 choiceId: $choice->id,
                 choiceCode: $choice->code,
                 amount: $amountCents / 100.0,
-                odds: $odds,
-                potential: $potential / 100.0,
+                odds: (float) $bet->odds,
+                potential: (int) $bet->potential_win_cents / 100.0,
             );
         });
         } catch (\Throwable $e) {
@@ -471,9 +506,10 @@ class DashboardJoueur extends Component
             return;
         }
 
-        // Refresh balance
+        // Refresh balance and dynamic future gains (sum of open bets updated potentials)
         $acc = $user->account()->first();
         $this->balance = $acc?->balance ?? 0.0;
+        $this->gainsFuturs = (float) (Bet::where('user_id', $user->id)->where('status','open')->sum('potential_win_cents') / 100);
     }
 
     /**
