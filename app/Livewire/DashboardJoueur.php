@@ -34,6 +34,8 @@ class DashboardJoueur extends Component
     public string $newPlayerPassword = '';
     public float $newPlayerBalance = 1000.0; // euros
 
+    public string $playerName;
+
     // Admin: injection form
     public float $injectionAmount = 0.0; // euros
     public array $injectionSelected = []; // user ids
@@ -55,6 +57,7 @@ class DashboardJoueur extends Component
             return; // Non authentifié
         }
 	$this->isAdmin = (bool)$user->is_admin;
+    $this->playerName = $user->name;
     // Lire le solde réel du compte (en euros via l'accessor) sans créer par défaut
     $account = $user->account()->first();
     $this->balance = $account?->balance ?? 0.0;

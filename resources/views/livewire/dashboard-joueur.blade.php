@@ -25,7 +25,6 @@
 
 <div class="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-red-900 via-black to-red-700 text-white">
 @php /* Le composant Livewire fournit $leaderboard: top 50 users triés par solde */ @endphp
-
     <!-- Bouton mobile afficher classement -->
     <button id="toggleClassementMobile" class="md:hidden fixed bottom-4 right-4 z-50 bg-red-700 hover:bg-red-800 text-white font-semibold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
         🏆 <span>Classement</span>
@@ -80,6 +79,11 @@
         </div>
     </div>
     @if(($houseStats ?? null))
+    <!-- Bouton mobile afficher Maison -->
+    <button id="toggleMaisonMobile" class="md:hidden fixed bottom-4 left-4 z-50 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+        🏦 <span>Maison</span>
+    </button>
+    <!-- Panel Maison flottant (masqué sur mobile jusqu'au clic) -->
     <div id="housePanel" class="hidden md:flex fixed top-1/2 left-1/2 md:left-8 z-50 transform -translate-y-1/2 -translate-x-1/2 md:translate-x-0 items-center w-11/12 md:w-auto">
         <div class="bg-black bg-opacity-80 border-r-4 border-emerald-800 rounded-xl md:rounded-r-xl shadow-xl w-full md:w-80 max-h-[50vh] overflow-hidden flex flex-col">
             <div class="px-6 py-4 flex items-center justify-center">
@@ -110,7 +114,7 @@
                 ⚙️
             </button>
         </div>
-        <h2 class="text-2xl md:text-4xl font-bold mb-4 md:mb-6 text-center text-red-500">Dashboard Joueur</h2>
+        <h2 class="text-2xl md:text-4xl font-bold mb-4 md:mb-6 text-center text-red-500">Dashboard {{ $playerName }}</h2>
         <div class="flex flex-col items-center mb-6 md:mb-8">
             <div class="text-xl md:text-2xl font-semibold mb-1 md:mb-2">Solde du compte</div>
             <div class="flex items-center gap-3 mb-3 md:mb-4">
@@ -174,7 +178,7 @@
                 'titre' => $e->title,
                 'type' => $e->status,
                 'miseMin' => (int) max(10000, floor($userBalance * 0.05)),
-                'miseMax' => (int) max(100000, floor($userBalance * 0.5)),
+                'miseMax' => (int) max(1000000, floor($userBalance * 0.5)),
                 'margin' => (float) $e->margin,
                 'description' => $e->description,
                 'choices' => ($e->choices ?? collect())->map(function($c){
@@ -214,6 +218,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if(btn && panel){
         btn.addEventListener('click', () => {
             panel.classList.toggle('hidden');
+        });
+    }
+    const btnMaison = document.getElementById('toggleMaisonMobile');
+    const maisonPanel = document.getElementById('housePanel');
+    if(btnMaison && maisonPanel){
+        btnMaison.addEventListener('click', () => {
+            maisonPanel.classList.toggle('hidden');
         });
     }
 });
@@ -752,7 +763,7 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="px-5 py-4 border-t border-red-800 bg-black/60 flex justify-end gap-3">
     <button data-close="modalAdmin" wire:click="$set('adminModalOpen', false)" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs md:text-sm font-semibold">Fermer</button>
     </div>
-  </div>
+</div>
 </div>
 @endif
 <div id="modalLogout" class="fixed inset-0 z-[59] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -1338,7 +1349,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 donationRecipient = user;
                 donationRecipientContainer.innerHTML = `<div class='flex items-center gap-2 bg-red-800/30 border border-red-700/50 px-3 py-2 rounded'>
                     <span class='text-red-200 font-semibold text-xs'>${user.pseudo}</span>
-                    <button type='button' id='donationRemoveRecipient' class='text-red-300 hover:text-white font-bold text-xs'>×</button>
+                    <button type='button' id='donationRemoveRecipient' class='text-red-300 hover:text-white font-bold'>×</button>
                 </div>`;
                 document.getElementById('donationRemoveRecipient').addEventListener('click', ()=>{
                     donationRecipient = null; donationRecipientContainer.innerHTML='<span class="text-[11px] text-gray-500">Aucun destinataire sélectionné</span>';
@@ -1812,7 +1823,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Dynamic limits per balance
     const bal = parseFloat(playerMeta ? (playerMeta.getAttribute('data-balance')||'0') : '0');
     const dynMin = Math.floor(Math.max(bal * 0.05, 10000));
-    const dynMax = Math.floor(Math.max(100000, bal * 0.50));
+    const dynMax = Math.floor(Math.max(1000000, bal * 0.50));
     // pariMise.setAttribute('min', String(dynMin));
     pariMise.setAttribute('max', String(dynMax));
     pariMise.value = String(dynMin);
