@@ -89,11 +89,24 @@ class DashboardJoueur extends Component
             ->limit(50)
             ->get();
         // Bet events and user's active bets
+        // Load events and aggregate total bet amounts per choice for odds
         $betEvents = BetEvent::with(['choices' => function($q){ $q->orderBy('id'); }])
             ->orderByRaw("FIELD(status, 'disponible','annonce','en_cours','ferme')")
             ->orderBy('id')
             ->limit(100)
             ->get();
+        // Map choice_id => total amount (open bets)
+        $choiceSums = Bet::query()
+            ->select('bet_choice_id', DB::raw('SUM(amount_cents) as sum_amount'))
+            ->where('status','open')
+            ->groupBy('bet_choice_id')
+            ->pluck('sum_amount','bet_choice_id');
+        // Attach sums to choices for UI consumption
+        foreach ($betEvents as $ev) {
+            foreach ($ev->choices as $ch) {
+                $ch->total_bet_cents = (int) ($choiceSums[$ch->id] ?? 0);
+            }
+        }
         $user = Auth::user();
         $userActiveBets = collect();
         if ($user) {
@@ -343,17 +356,40 @@ class DashboardJoueur extends Component
         if ($amountCents <= 0) {
             throw ValidationException::withMessages(['amount' => 'Montant invalide']);
         }
-        // Validate against event min/max
-        if ($amountCents < $event->min_bet_cents || $amountCents > $event->max_bet_cents) {
-            throw ValidationException::withMessages(['amount' => 'Hors limites']);
+        // Dynamic limits based on player's balance: min=max(5% solde,10k), max=max(1M,50% solde)
+        $accCheck = $user->account()->first();
+        $balance = $accCheck ? ($accCheck->balance_cents / 100.0) : 0.0;
+        $dynMin = (int) round(max($balance * 0.05, 10000) * 100);
+        $dynMax = (int) round(max(1000000, $balance * 0.50) * 100);
+        if ($amountCents < $dynMin || $amountCents > $dynMax) {
+            throw ValidationException::withMessages(['amount' => 'Hors limites dynamiques']);
+        }
+
+        // Prevent multiple open bets by the same user on the same event
+        $exists = Bet::where('user_id',$user->id)->where('bet_event_id',$event->id)->where('status','open')->exists();
+        if ($exists) {
+            throw ValidationException::withMessages(['bet' => 'Pari déjà placé sur cet événement']);
         }
 
         DB::transaction(function () use ($user, $event, $choice, $amountCents) {
-            // Compute dynamic odds based on participants and margin at placement time
-            $total = max(1, (int) $event->choices->sum('participants_count'));
-            $share = $choice->participants_count > 0 ? ($choice->participants_count / $total) : 0.0;
-            $odds = $share <= 0 ? 0.0 : (1.0 / $share) * (float) $event->margin;
-            if ($odds <= 0) { $odds = 1.00; }
+            // Combined odds formula with commission 10% (fixed)
+            $commission = 0.10;
+            $totalParticipants = max(1, (int) $event->choices->sum('participants_count'));
+            $participantsChoice = max(1, (int) $choice->participants_count);
+            // Use current open bets sums as total_mises
+            $choiceSums = Bet::query()
+                ->select('bet_choice_id', DB::raw('SUM(amount_cents) as sum_amount'))
+                ->where('status','open')
+                ->whereIn('bet_choice_id', $event->choices->pluck('id'))
+                ->groupBy('bet_choice_id')
+                ->pluck('sum_amount','bet_choice_id');
+            $totalMises = max(1, (int) $choiceSums->sum());
+            $miseSurChoix = max(1, (int) ($choiceSums[$choice->id] ?? 0));
+            // odds = (total_mises/mise_sur_choix) * (total_joueurs/joueurs_sur_choix) * (1-commission)
+            $odds = ($totalMises / $miseSurChoix) * ($totalParticipants / $participantsChoice) * (1.0 - $commission);
+            // bounds
+            if ($odds < 1.20) { $odds = 1.20; }
+            if ($odds > 50.0) { $odds = 50.0; }
             $potential = (int) round($amountCents * $odds);
 
             // Debit balance via transaction and create Bet

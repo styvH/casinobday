@@ -165,7 +165,7 @@
                 'currentUserId' => auth()->id(),
                 'players' => ($allPlayers ?? collect())->map(fn($u)=>['id'=>$u->id,'name'=>$u->name])->values(),
             ];
-            $betEventsPayload = ($betEvents ?? collect())->map(function($e){
+        $betEventsPayload = ($betEvents ?? collect())->map(function($e){
                 return [
                     'id' => $e->id,
                     'titre' => $e->title,
@@ -174,13 +174,14 @@
                     'miseMax' => (int) floor(($e->max_bet_cents ?? 0) / 100),
                     'margin' => (float) $e->margin,
                     'description' => $e->description,
-                    'choices' => ($e->choices ?? collect())->map(function($c){
+            'choices' => ($e->choices ?? collect())->map(function($c){
                         return [
                             // UI expects id as string code; also include numeric for backend
                             'id' => (string) $c->code,
                             'choiceId' => (int) $c->id,
                             'label' => $c->label,
                             'participants' => (int) $c->participants_count,
+                'stake' => (int) floor(((int)($c->total_bet_cents ?? 0)) / 100),
                         ];
                     })->values(),
                 ];
@@ -238,7 +239,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     <!-- Modal Nouveau Pari -->
     <div id="modalNewBet" class="fixed inset-0 z-[72] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div class="w-11/12 md:w-3/4 lg:w-1/2 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col">
+      <div class="w-11/12 md:w-3/4 lg:w-2/3 xl:w-1/2 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[85vh] overflow-hidden flex flex-col">
         <div class="flex items-center justify-between px-5 py-4 border-b border-red-800">
             <h3 class="text-lg md:text-2xl font-bold text-red-400 flex items-center gap-2">Créer un pari</h3>
             <button data-close="modalNewBet" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
@@ -310,7 +311,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             <div class="bg-black/40 rounded-xl p-4 border border-red-800/50 space-y-3">
                 <label class="block text-sm font-semibold text-red-300">Votre mise (€)</label>
-                <input id="pariMise" type="number" min="1000" max="100000" value="1000" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-4 py-2 text-sm" />
+                <input id="pariMise" type="number" step="10000" min="{{ (int) $betMin }}" max="{{ (int) $betMax/2 }}" value="{{ (int) $betMin }}" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-4 py-2 text-sm" />
                 <div class="flex justify-between text-xs text-gray-400">
                     <span>Mise min: <span id="pariMiseMin">-</span>€</span>
                     <span>Mise max: <span id="pariMiseMax">-</span>€</span>
@@ -997,11 +998,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function computeOdds(pari){
-        const total = Math.max(1, pari.choices.reduce((s,c)=> s + c.participants, 0));
+        const commission = 0.10;
+        const totalParticipants = Math.max(1, pari.choices.reduce((s,c)=> s + (parseInt(c.participants)||0), 0));
+        const totalStake = Math.max(1, pari.choices.reduce((s,c)=> s + (parseInt(c.stake)||0), 0));
         const odds = {};
         pari.choices.forEach(c => {
-            const share = c.participants / total;
-            const raw = share === 0 ? 0 : (1 / share) * pari.margin;
+            const participantsChoice = Math.max(1, parseInt(c.participants)||0);
+            const stakeChoice = Math.max(1, parseInt(c.stake)||0);
+            let raw = (totalStake / stakeChoice) * (totalParticipants / participantsChoice) * (1 - commission);
+            if (raw < 1.20) raw = 1.20; if (raw > 50) raw = 50;
             odds[c.id] = raw;
         });
         return odds;
@@ -1017,24 +1022,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const [label, cls] = badgeType(p.type);
             const nbChoices = p.choices.length;
             const preview = p.choices.slice(0,2).map(c=>c.label).join(' / ') + (nbChoices>2?' ...':'');
-            return `<div class=\"group border border-red-800/40 hover:border-red-500/70 transition rounded-xl p-4 mb-3 bg-black/40 hover:bg-black/60 cursor-pointer" data-pari-id=\"${p.id}\">
-                <div class=\"flex items-start justify-between gap-3\">
-                    <div class=\"flex-1\">
-                        <div class=\"font-semibold text-red-300 group-hover:text-red-200\">${p.titre}</div>
-                        <div class=\"text-[11px] mt-1 text-gray-400 leading-snug\">${p.description.substring(0,70)}...</div>
-                        <div class=\"mt-2 flex flex-wrap items-center gap-2\">
-                            <span class=\"text-xs px-2 py-0.5 rounded-full ${cls}\">${label}</span>
-                            <span class=\"text-xs bg-red-800/40 text-red-300 px-2 py-0.5 rounded-full\">${nbChoices} choix</span>
-                            <span class=\"text-[10px] text-gray-400\">${preview}</span>
-                        </div>
-                    </div>
-                    <div class=\"text-right text-[10px] text-gray-400 space-y-1\">
-                        <div>Min <span class=\"text-gray-200\">${p.miseMin}€</span></div>
-                        <div>Max <span class=\"text-gray-200\">${p.miseMax}€</span></div>
-                        <div class=\"pt-1\">Odds dyn.</div>
+            const already = hasActiveBetOn(p.id);
+            const outerCls = `group border border-red-800/40 ${already?'opacity-70':''} hover:border-red-500/70 transition rounded-xl p-4 mb-3 bg-black/40 hover:bg-black/60 ${already?'cursor-not-allowed':'cursor-pointer'}`;
+            return `<div class="${outerCls}" data-pari-id="${p.id}">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex-1">
+                    <div class="font-semibold text-red-300 group-hover:text-red-200">${p.titre}</div>
+                    <div class="text-[11px] mt-1 text-gray-400 leading-snug">${p.description.substring(0,70)}...</div>
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                        <span class="text-xs px-2 py-0.5 rounded-full ${cls}">${label}</span>
+                        <span class="text-xs bg-red-800/40 text-red-300 px-2 py-0.5 rounded-full">${nbChoices} choix</span>
+                        <span class="text-[10px] text-gray-400">${preview}</span>
                     </div>
                 </div>
-            </div>`;
+                <div class="text-right text-[10px] text-gray-400 space-y-1">
+                    <div>Min <span class="text-gray-200">${p.miseMin}€</span></div>
+                    <div>Max <span class="text-gray-200">${p.miseMax}€</span></div>
+                    <div class="pt-1">Odds dyn.</div>
+                    ${already?'<div class="text-red-400 font-semibold mt-2">Déjà parié</div>':''}
+                </div>
+            </div>
+        </div>`;
         }).join('');
     }
 
@@ -1053,6 +1061,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Données fictives des paris en cours (référencent éventuellement un pari de la liste + choix)
     const pariesActifs = Array.isArray(__betData.activeBets) ? __betData.activeBets : [];
+    function hasActiveBetOn(eventId){ return pariesActifs.some(b=>parseInt(b.ref)===parseInt(eventId)); }
 
     function renderPariesEnCours(){
         if(!pariesActifs.length){
@@ -1786,6 +1795,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = e.target.closest('[data-pari-id]');
         if(!card) return;
         const id = parseInt(card.getAttribute('data-pari-id'));
+    if (hasActiveBetOn(id)) { return; }
         pariSelectionne = paris.find(p=>p.id===id);
         if(!pariSelectionne) return;
         const [label, cls] = badgeType(pariSelectionne.type);
@@ -1796,9 +1806,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const firstChoice = pariSelectionne.choices[0];
     pariSelectionne.selectedChoice = firstChoice.id;
     updateDisplayedOdds();
-        pariMise.value = pariSelectionne.miseMin;
-        pariMiseMin.textContent = pariSelectionne.miseMin;
-        pariMiseMax.textContent = pariSelectionne.miseMax;
+    // Dynamic limits per balance
+    const bal = parseFloat(playerMeta ? (playerMeta.getAttribute('data-balance')||'0') : '0');
+    const dynMin = Math.floor(Math.max(bal * 0.05, 10000));
+    const dynMax = Math.floor(Math.max(1000000, bal * 0.50));
+    pariMise.setAttribute('min', String(dynMin));
+    pariMise.setAttribute('max', String(dynMax));
+    pariMise.value = String(dynMin);
+    pariMiseMin.textContent = dynMin;
+    pariMiseMax.textContent = dynMax;
         updateGain();
         closeModal(modalListe);
         openModal(modalDetails);
@@ -1807,8 +1823,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateGain(){
         if(!pariSelectionne) return;
         let mise = parseFloat(pariMise.value)||0;
-        if(mise < pariSelectionne.miseMin) mise = pariSelectionne.miseMin;
-        if(mise > pariSelectionne.miseMax) mise = pariSelectionne.miseMax;
+    const minAttr = parseFloat(pariMise.getAttribute('min')||'0');
+    const maxAttr = parseFloat(pariMise.getAttribute('max')||'0');
+    if(mise < minAttr) mise = minAttr;
+    if(mise > maxAttr) mise = maxAttr;
         pariMise.value = mise;
         const oddsMap = computeOdds(pariSelectionne);
         const currentOdds = oddsMap[pariSelectionne.selectedChoice] || 0;
@@ -1852,6 +1870,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const choice = pariSelectionne.choices.find(c=>c.id===pariSelectionne.selectedChoice);
         const choiceId = choice ? parseInt(choice.choiceId) : null;
         if(!choiceId){ alert('Choix invalide'); return; }
+        // Prevent duplicate bet on same event
+        if (pariesActifs.some(b=>parseInt(b.ref)===parseInt(pariSelectionne.id))) {
+            alert('Vous avez déjà un pari ouvert sur cet événement.');
+            return;
+        }
         try {
             if (window.Livewire) {
                 const comp = lwComp();
@@ -1862,7 +1885,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch(e) { console.warn('Livewire placeBet error', e); }
 
         // MAJ optimiste UI
-        if(choice){ choice.participants += 1; }
+        if(choice){
+            choice.participants = (parseInt(choice.participants)||0) + 1;
+            choice.stake = (parseInt(choice.stake)||0) + Math.floor(mise);
+        }
         pariesActifs.unshift({ ref: parseInt(pariSelectionne.id), choix: String(pariSelectionne.selectedChoice), mise: Math.floor(mise) });
         closeModal(modalDetails);
         // Optionnel: message
