@@ -160,40 +160,43 @@
             <p class="text-gray-400 text-sm md:text-base">Engagez la partie et montez au classement.</p>
         </div>
     </main>
-        @php
-            $adminPlayersPayload = [
-                'currentUserId' => auth()->id(),
-                'players' => ($allPlayers ?? collect())->map(fn($u)=>['id'=>$u->id,'name'=>$u->name])->values(),
+    @php
+        $userBalance = (int) floor((auth()->user()->balance_cents ?? 0) / 100);
+
+        $adminPlayersPayload = [
+            'currentUserId' => auth()->id(),
+            'players' => ($allPlayers ?? collect())->map(fn($u)=>['id'=>$u->id,'name'=>$u->name])->values(),
+        ];
+
+        $betEventsPayload = ($betEvents ?? collect())->map(function($e) use ($userBalance) {
+            return [
+                'id' => $e->id,
+                'titre' => $e->title,
+                'type' => $e->status,
+                'miseMin' => (int) max(10000, floor($userBalance * 0.05)),
+                'miseMax' => (int) max(100000, floor($userBalance * 0.5)),
+                'margin' => (float) $e->margin,
+                'description' => $e->description,
+                'choices' => ($e->choices ?? collect())->map(function($c){
+                    return [
+                        'id' => (string) $c->code,
+                        'choiceId' => (int) $c->id,
+                        'label' => $c->label,
+                        'participants' => (int) $c->participants_count,
+                        'stake' => (int) floor(((int)($c->total_bet_cents ?? 0)) / 100),
+                    ];
+                })->values(),
             ];
-        $betEventsPayload = ($betEvents ?? collect())->map(function($e){
-                return [
-                    'id' => $e->id,
-                    'titre' => $e->title,
-                    'type' => $e->status,
-                    'miseMin' => (int) floor(($e->min_bet_cents ?? 0) / 100),
-                    'miseMax' => (int) floor(($e->max_bet_cents ?? 0) / 100),
-                    'margin' => (float) $e->margin,
-                    'description' => $e->description,
-            'choices' => ($e->choices ?? collect())->map(function($c){
-                        return [
-                            // UI expects id as string code; also include numeric for backend
-                            'id' => (string) $c->code,
-                            'choiceId' => (int) $c->id,
-                            'label' => $c->label,
-                            'participants' => (int) $c->participants_count,
-                'stake' => (int) floor(((int)($c->total_bet_cents ?? 0)) / 100),
-                        ];
-                    })->values(),
-                ];
-            })->values();
-            $userBetsPayload = ($userActiveBets ?? collect())->map(function($b){
-                return [
-                    'ref' => (int) $b->bet_event_id,
-                    'choix' => (string) optional($b->choice)->code ?? '',
-                    'mise' => (int) floor(($b->amount_cents ?? 0) / 100),
-                ];
-            })->values();
-        @endphp
+        })->values();
+
+        $userBetsPayload = ($userActiveBets ?? collect())->map(function($b){
+            return [
+                'ref' => (int) $b->bet_event_id,
+                'choix' => (string) optional($b->choice)->code ?? '',
+                'mise' => (int) floor(($b->amount_cents ?? 0) / 100),
+            ];
+        })->values();
+    @endphp
         <script id="adminPlayersData" type="application/json">{!! json_encode($adminPlayersPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
         <script id="betData" type="application/json">{!! json_encode(['events' => $betEventsPayload, 'activeBets' => $userBetsPayload], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
         @if(($houseStats ?? null))
@@ -311,7 +314,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             <div class="bg-black/40 rounded-xl p-4 border border-red-800/50 space-y-3">
                 <label class="block text-sm font-semibold text-red-300">Votre mise (€)</label>
-                <input id="pariMise" type="number" step="10000" min="{{ (int) $betMin }}" max="{{ (int) $betMax/2 }}" value="{{ (int) $betMin }}" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-4 py-2 text-sm" />
+                <input id="pariMise" type="number" step="10000" max="{{ (int) $betMax/2 }}" value="{{ (int) $betMin }}" class="w-full bg-black/60 border border-red-700 focus:ring-2 focus:ring-red-600 focus:outline-none rounded-lg px-4 py-2 text-sm" />
                 <div class="flex justify-between text-xs text-gray-400">
                     <span>Mise min: <span id="pariMiseMin">-</span>€</span>
                     <span>Mise max: <span id="pariMiseMax">-</span>€</span>
@@ -667,7 +670,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                     <div>
                         <label class="block text-[11px] font-semibold text-red-300 mb-1">Solde initial (€)</label>
-                        <input wire:model.defer="newPlayerBalance" type="number" step="0.01" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-600" />
+                        <input wire:model.defer="newPlayerBalance" type="number" step="10000" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-600" />
                         @error('newPlayerBalance') <span class="text-[10px] text-red-400">{{ $message }}</span> @enderror
                     </div>
                 </div>
@@ -1809,8 +1812,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Dynamic limits per balance
     const bal = parseFloat(playerMeta ? (playerMeta.getAttribute('data-balance')||'0') : '0');
     const dynMin = Math.floor(Math.max(bal * 0.05, 10000));
-    const dynMax = Math.floor(Math.max(1000000, bal * 0.50));
-    pariMise.setAttribute('min', String(dynMin));
+    const dynMax = Math.floor(Math.max(100000, bal * 0.50));
+    // pariMise.setAttribute('min', String(dynMin));
     pariMise.setAttribute('max', String(dynMax));
     pariMise.value = String(dynMin);
     pariMiseMin.textContent = dynMin;

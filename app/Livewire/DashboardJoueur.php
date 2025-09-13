@@ -467,7 +467,7 @@ class DashboardJoueur extends Component
                 'description' => $description,
                 'status' => 'disponible',
                 'margin' => 0.90,
-                'min_bet_cents' => 100000,  // 1 000 €
+                'min_bet_cents' => 1000000,  // 10 000 €
                 'max_bet_cents' => 10000000, // 100 000 €
             ]);
 

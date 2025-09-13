@@ -13,8 +13,9 @@ class HouseSeeder extends Seeder
         $house = HouseAccount::first();
         if (!$house) {
             HouseAccount::create([
-                'starting_balance_cents' => 100000000000, // 1,000,000,000 €
-                'balance_cents' => 100000000000,
+                // 1,000 milliards € = 1,000,000,000,000 € => in cents: 100,000,000,000,000
+                'starting_balance_cents' => 100000000000000,
+                'balance_cents' => 100000000000000,
             ]);
         }
     }
