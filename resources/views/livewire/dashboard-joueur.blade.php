@@ -342,6 +342,26 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
+<!-- Modal Confirmation Pari -->
+<div id="modalBetConfirm" class="fixed inset-0 z-[66] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div class="w-11/12 md:w-[520px] bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl overflow-hidden">
+        <div class="px-6 py-4 border-b border-red-800 flex items-center gap-2">
+            <span class="text-green-400">✔</span>
+            <h3 class="text-lg font-semibold text-red-100">Pari enregistré</h3>
+        </div>
+        <div class="p-6 space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-gray-300">Événement</span><span id="betConfirmEvent" class="font-semibold text-red-200"></span></div>
+            <div class="flex justify-between"><span class="text-gray-300">Choix</span><span id="betConfirmChoice" class="font-semibold text-red-200"></span></div>
+            <div class="flex justify-between"><span class="text-gray-300">Côte</span><span id="betConfirmOdds" class="font-mono text-green-400"></span></div>
+            <div class="flex justify-between"><span class="text-gray-300">Mise</span><span id="betConfirmStake" class="font-mono"></span></div>
+            <div class="flex justify-between"><span class="text-gray-300">Gain potentiel</span><span id="betConfirmPotential" class="font-mono text-amber-300"></span></div>
+        </div>
+        <div class="px-6 py-4 border-t border-red-800 flex justify-end">
+            <button data-close="modalBetConfirm" class="px-4 py-2 bg-red-700 hover:bg-red-800 rounded-lg">Fermer</button>
+        </div>
+    </div>
+    </div>
+
 <!-- Modal Inscription Partie Physique -->
 <div id="modalInscriptionPhysique" class="fixed inset-0 z-[75] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
   <div class="w-11/12 md:w-3/4 lg:w-2/3 xl:w-1/2 bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl max-h-[92vh] overflow-hidden flex flex-col">
@@ -806,6 +826,14 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
 </div>
 
+<!-- Toast Erreur Pari -->
+<div id="toastBetError" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[95] hidden">
+        <div class="px-4 py-3 bg-red-800 text-white rounded-lg shadow-lg border border-red-600 flex items-center gap-2">
+            <span>⚠</span>
+            <span id="toastBetErrorMsg" class="text-sm"></span>
+        </div>
+    </div>
+
 <script>
 // Gestion des modals et paris fictifs
 document.addEventListener('DOMContentLoaded', () => {
@@ -989,6 +1017,52 @@ document.addEventListener('DOMContentLoaded', () => {
         ({ injectionSearch, injectionResults, injectionSelectedTags } = qInjectionRefs());
         bindInjectionSearch();
         renderInjectionSelected();
+    });
+    // Écoute les événements navigateur de confirmation/erreur
+    window.addEventListener('bet-placed', (e) => {
+        try {
+            const det = e.detail || {};
+            const evId = parseInt(det.eventId);
+            const choiceId = parseInt(det.choiceId);
+            const stake = parseFloat(det.amount||0);
+            const odds = parseFloat(det.odds||0);
+            const potential = parseFloat(det.potential||0);
+            // UI: fermer le modal de détails
+            const modalDetails = document.getElementById('modalPariDetails');
+            if(modalDetails) closeModal(modalDetails);
+            // UI: mettre à jour la liste des paris actifs locale (optimiste)
+            if(!Number.isNaN(evId)){
+                pariesActifs.unshift({ ref: evId, choix: String(choiceId), mise: Math.floor(stake) });
+            }
+            // Remplir le modal de confirmation
+            const elEvent = document.getElementById('betConfirmEvent');
+            const elChoice = document.getElementById('betConfirmChoice');
+            const elOdds = document.getElementById('betConfirmOdds');
+            const elStake = document.getElementById('betConfirmStake');
+            const elPotential = document.getElementById('betConfirmPotential');
+            // Trouver libellés depuis la sélection courante si dispo
+            let evTitle = pariSelectionne?.titre || `#${evId}`;
+            let choiceLabel = (pariSelectionne?.choices||[]).find(c=>parseInt(c.id)===choiceId)?.label || `Choix ${choiceId}`;
+            elEvent && (elEvent.textContent = evTitle);
+            elChoice && (elChoice.textContent = choiceLabel);
+            elOdds && (elOdds.textContent = isFinite(odds) ? odds.toFixed(2) : '—');
+            const fmt = (n)=> (typeof n==='number' && isFinite(n)) ? n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €' : '—';
+            elStake && (elStake.textContent = fmt(stake));
+            elPotential && (elPotential.textContent = fmt(potential));
+            // Ouvrir le modal
+            const modal = document.getElementById('modalBetConfirm');
+            if(modal){ openModal(modal); }
+        } catch(err){ console.warn('bet-placed handler error', err); }
+    });
+    window.addEventListener('bet-error', (e) => {
+        const msg = (e.detail && e.detail.message) ? String(e.detail.message) : 'Erreur pendant le pari';
+        const toast = document.getElementById('toastBetError');
+        const el = document.getElementById('toastBetErrorMsg');
+        if(el) el.textContent = msg;
+        if(toast){
+            toast.classList.remove('hidden');
+            setTimeout(()=> toast.classList.add('hidden'), 2500);
+        }
     });
     // Logout refs
     const logoutConfirmBtn = document.getElementById('logoutConfirmBtn');
@@ -1878,38 +1952,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    confirmerPariBtn.addEventListener('click', () => {
+    confirmerPariBtn && confirmerPariBtn.addEventListener('click', () => {
         if(!pariSelectionne) return;
         const mise = parseFloat(pariMise.value)||0;
         const oddsMap = computeOdds(pariSelectionne);
         const currentOdds = oddsMap[pariSelectionne.selectedChoice] || 0;
         // Trouver la choiceId numérique pour l'appel serveur
-        const choice = pariSelectionne.choices.find(c=>c.id===pariSelectionne.selectedChoice);
-        const choiceId = choice ? parseInt(choice.choiceId) : null;
-        if(!choiceId){ alert('Choix invalide'); return; }
-        // Prevent duplicate bet on same event
-        if (pariesActifs.some(b=>parseInt(b.ref)===parseInt(pariSelectionne.id))) {
-            alert('Vous avez déjà un pari ouvert sur cet événement.');
+        const choice = (pariSelectionne.choices||[]).find(c=>String(c.id)===String(pariSelectionne.selectedChoice));
+        const choiceId = choice ? parseInt(choice.choiceId) : NaN;
+        if(Number.isNaN(choiceId)){
+            const evt = new CustomEvent('bet-error', { detail: { message: 'Choix invalide' } });
+            window.dispatchEvent(evt);
             return;
         }
+        // Empêcher un doublon de pari sur le même événement
+        if (pariesActifs.some(b=>parseInt(b.ref)===parseInt(pariSelectionne.id))) { return; }
         try {
-            if (window.Livewire) {
-                const comp = lwComp();
-                if (comp && typeof comp.call === 'function') {
-                    comp.call('placeBet', parseInt(pariSelectionne.id), choiceId, parseFloat(mise));
-                }
+            const comp = lwComp();
+            if (comp && typeof comp.call === 'function') {
+                comp.call('placeBet', parseInt(pariSelectionne.id), choiceId, parseFloat(mise));
             }
         } catch(e) { console.warn('Livewire placeBet error', e); }
-
-        // MAJ optimiste UI
-        if(choice){
-            choice.participants = (parseInt(choice.participants)||0) + 1;
-            choice.stake = (parseInt(choice.stake)||0) + Math.floor(mise);
-        }
-        pariesActifs.unshift({ ref: parseInt(pariSelectionne.id), choix: String(pariSelectionne.selectedChoice), mise: Math.floor(mise) });
-        closeModal(modalDetails);
-        // Optionnel: message
-        alert(`Pari placé: ${pariSelectionne.titre}\nChoix: ${choice?.label || pariSelectionne.selectedChoice}\nCôte: ${currentOdds.toFixed(2)}\nMise: ${mise.toLocaleString('fr-FR')} €`);
     });
 
     // Fermeture modals générique

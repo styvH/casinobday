@@ -346,19 +346,31 @@ class DashboardJoueur extends Component
     public function placeBet(int $eventId, int $choiceId, float $amount): void
     {
         $user = Auth::user();
-        if(!$user instanceof User){ return; }
+        if(!$user instanceof User){
+            $this->dispatch('bet-error', message: 'Veuillez vous connecter.');
+            return;
+        }
 
         $event = BetEvent::with('choices')->find($eventId);
-        if(!$event){ throw ValidationException::withMessages(['bet' => 'Événement introuvable']); }
-        if(!in_array($event->status, ['disponible','en_cours','annonce', 'ferme'])){
-            throw ValidationException::withMessages(['bet' => 'Événement fermé']);
+        if(!$event){
+            $this->dispatch('bet-error', message: 'Événement introuvable');
+            return;
+        }
+        // Seuls les événements au statut "disponible" acceptent de nouveaux paris
+        if($event->status !== 'disponible'){
+            $this->dispatch('bet-error', message: "Cet événement n'est pas disponible pour parier.");
+            return;
         }
         $choice = $event->choices->firstWhere('id', $choiceId);
-        if(!$choice){ throw ValidationException::withMessages(['bet' => 'Choix invalide']); }
+        if(!$choice){
+            $this->dispatch('bet-error', message: 'Choix invalide');
+            return;
+        }
 
         $amountCents = (int) round($amount * 100);
         if ($amountCents <= 0) {
-            throw ValidationException::withMessages(['amount' => 'Montant invalide']);
+            $this->dispatch('bet-error', message: 'Montant invalide');
+            return;
         }
         // Dynamic limits based on player's balance: min=max(5% solde,10k), max=max(1M,50% solde)
         $accCheck = $user->account()->first();
@@ -366,15 +378,18 @@ class DashboardJoueur extends Component
         $dynMin = (int) round(max($balance * 0.05, 10000) * 100);
         $dynMax = (int) round(max(1000000, $balance * 0.50) * 100);
         if ($amountCents < $dynMin || $amountCents > $dynMax) {
-            throw ValidationException::withMessages(['amount' => 'Hors limites dynamiques']);
+            $this->dispatch('bet-error', message: 'Montant hors limites dynamiques');
+            return;
         }
 
         // Prevent multiple open bets by the same user on the same event
         $exists = Bet::where('user_id',$user->id)->where('bet_event_id',$event->id)->where('status','open')->exists();
         if ($exists) {
-            throw ValidationException::withMessages(['bet' => 'Pari déjà placé sur cet événement']);
+            $this->dispatch('bet-error', message: 'Vous avez déjà un pari ouvert sur cet événement');
+            return;
         }
 
+        try {
         DB::transaction(function () use ($user, $event, $choice, $amountCents) {
             // Combined odds formula with commission 10% (fixed)
             $commission = 0.10;
@@ -426,22 +441,34 @@ class DashboardJoueur extends Component
             // Increment participants on the chosen choice
             $choice->increment('participants_count');
 
-            // House commission: (1 - margin) of the stake
-            $commission = (int) round($amountCents * (1 - (float) $event->margin));
-            if ($commission > 0) {
-                $house = HouseAccount::singleton();
-                $house->credit('bet_commission_in', $commission, [
-                    'bet_event_id' => $event->id,
-                    'bet_id' => $bet->id,
-                    'user_id' => $user->id,
-                ]);
-            }
+            // House collects the full stake at placement; payouts will be debited at settlement
+            $house = HouseAccount::singleton();
+            $house->credit('bet_stake_in', $amountCents, [
+                'bet_event_id' => $event->id,
+                'bet_id' => $bet->id,
+                'user_id' => $user->id,
+            ]);
 
             // Update component computed fields
             $this->pariesEnCours += 1;
             $this->totalMise += $amountCents / 100.0;
             $this->gainsFuturs += $potential / 100.0;
+
+            // Notifier le front: pari enregistré (événement navigateur)
+            $this->dispatch(
+                'bet-placed',
+                betId: $bet->id,
+                eventId: $event->id,
+                choiceId: $choice->id,
+                amount: $amountCents / 100.0,
+                odds: $odds,
+                potential: $potential / 100.0,
+            );
         });
+        } catch (\Throwable $e) {
+            $this->dispatch('bet-error', message: "Erreur serveur pendant l'enregistrement du pari");
+            return;
+        }
 
         // Refresh balance
         $acc = $user->account()->first();

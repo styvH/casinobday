@@ -143,7 +143,7 @@ class BetMaster extends Component
             $this->flashError = 'Données de confirmation manquantes';
             return;
         }
-    if($this->confirmSelectCode ?? '' !== $this->confirmChoiceCode ?? ''){
+        if (strtoupper($this->confirmSelectCode ?? '') !== strtoupper($this->confirmChoiceCode ?? '')) {
             $this->flashError = 'Le code sélectionné ne correspond pas';
             return;
         }
@@ -169,6 +169,7 @@ class BetMaster extends Component
             $openBets = Bet::where('bet_event_id', $event->id)
                 ->where('status', 'open')
                 ->lockForUpdate()->get();
+            $house = HouseAccount::singleton();
 
             foreach ($openBets as $bet) {
                 if ($bet->bet_choice_id === $winner->id) {
@@ -192,6 +193,12 @@ class BetMaster extends Component
                                 'bet_event_id' => $event->id,
                                 'bet_choice_id' => $winner->id,
                             ],
+                        ]);
+                        // House pays out the winnings to the player
+                        $house->debit('bet_payout_out', $amount, [
+                            'bet_id' => $bet->id,
+                            'bet_event_id' => $event->id,
+                            'user_id' => $bet->user_id,
                         ]);
                         // Optionally, record a memo for house ledger without affecting balance
                         // HouseAccount::singleton()->memo('bet_payout_memo', $amount, [
