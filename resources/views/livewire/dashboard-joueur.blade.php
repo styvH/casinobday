@@ -74,7 +74,7 @@
             @if($hasTop10Countdown)
                 <div class="px-6 py-2">
                     <div class="flex items-center justify-between p-2 rounded-lg bg-black/60 border border-yellow-700">
-                        <div class="text-xs text-yellow-300">100k aux Top-10 dans</div>
+                        <div class="text-xs text-yellow-300">1M aux Top-10 dans</div>
                         <div class="text-lg font-extrabold text-yellow-400" id="top10Countdown">--:--</div>
                     </div>
                 </div>
@@ -294,7 +294,7 @@ document.addEventListener('DOMContentLoaded', function() {
 @endif
 @if(!empty($top10NextRunAt ?? null))
 <script>
-// Compte à rebours Top-10 100k
+// Compte à rebours Top-10 1M
 (function(){
     const meta = document.getElementById('top10Meta');
     const el = document.getElementById('top10Countdown');
@@ -842,6 +842,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span class="text-gray-400">Désactivé</span>
                     @endif
                 </span>
+                <button type="button" class="px-3 py-1 rounded bg-indigo-700 hover:bg-indigo-800" wire:click="toggleTop3Cycle({{ !empty($rewardActive) ? 'false' : 'true' }})">@if(!empty($rewardActive)) Stopper @else Activer @endif</button>
             </div>
             <div class="grid grid-cols-2 gap-3 text-xs">
                 <div>
@@ -853,18 +854,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     <input type="number" min="1" wire:model.defer="cycleRepeatCount" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-600" />
                 </div>
             </div>
+            <div class="grid grid-cols-2 gap-3 text-xs mt-2">
+                <div>
+                    <label class="block mb-1 text-gray-300">% Top‑3 (basis points, 1% = 100)</label>
+                    <input type="number" min="0" max="10000" wire:model="top3PercentBp" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-600" />
+                </div>
+                <div class="flex items-end">
+                    <button type="button" wire:click="updateTop3Percent" class="px-3 py-2 rounded bg-gray-700 hover:bg-gray-600">Enregistrer % Top‑3</button>
+                </div>
+            </div>
             <div class="flex items-center gap-2 mt-2">
                 <button type="button" wire:click="startRewardCycle" class="px-3 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-xs font-semibold">Démarrer le cycle</button>
                 <button type="button" wire:click="updateActiveRewardCycle" class="px-3 py-2 rounded-lg bg-amber-900 hover:bg-amber-800 text-xs font-semibold">Mettre à jour le cycle</button>
                 <button type="button" id="cancelCyclesBtn" class="px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs font-semibold">Annuler cycles</button>
             </div>
-            <p class="text-[11px] text-gray-400 mt-1">Verse 10% du solde maison: 5%/3%/2% aux Top 3 à chaque exécution.</p>
+            <p class="text-[11px] text-gray-400 mt-1">Verse 1% du solde maison: 0,5% / 0,3% / 0,2% aux Top 3 à chaque exécution.</p>
         </div>
 
         <div class="h-px bg-red-900/60"></div>
 
         <div class="space-y-2">
-            <h4 class="text-sm font-semibold text-red-300 flex items-center gap-2">🏦 Top-10: 100k toutes les 30 min</h4>
+            <h4 class="text-sm font-semibold text-red-300 flex items-center gap-2">🏦 Top-10 (montant configurable)</h4>
             <div class="flex items-center gap-2 text-xs">
                 <span>Statut:
                     @if($top10GrantEnabled)
@@ -880,7 +890,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     <label class="block mb-1 text-gray-300">Intervalle Top-10 (min)</label>
                     <input type="number" min="1" wire:model="top10IntervalMinutes" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-600" />
                 </div>
-                <div class="flex items-end">
+                <div>
+                    <label class="block mb-1 text-gray-300">Montant Top-10 (en € par joueur)</label>
+                    <input type="number" min="0" step="1" wire:model="top10AmountEuros" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-600" />
+                </div>
+                <div class="col-span-2 flex items-end justify-end">
                     <button type="button" wire:click="updateTopTenGrantSettings" class="px-3 py-2 rounded bg-gray-700 hover:bg-gray-600">Enregistrer</button>
                 </div>
             </div>

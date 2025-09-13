@@ -16,6 +16,7 @@ use App\Models\Bet;
 use App\Models\HouseAccount;
 use App\Models\RewardCycle;
 use App\Models\TopTenGrantSetting;
+use App\Models\RewardConfig;
 use App\Services\RewardService;
 
 class DashboardJoueur extends Component
@@ -60,6 +61,8 @@ class DashboardJoueur extends Component
     public int $cycleRepeatCount = 1;
     public bool $top10GrantEnabled = false;
     public int $top10IntervalMinutes = 30;
+    public int $top3PercentBp = 100; // basis points (1%=100)
+    public float $top10AmountEuros = 1000000.0; // default 1,000,000
 
     protected $listeners = [
         'blackjackWon' => 'onBlackjackWon',
@@ -248,7 +251,11 @@ class DashboardJoueur extends Component
         $this->top10GrantEnabled = (bool) ($setting?->enabled ?? false);
         if ($setting) {
             $this->top10IntervalMinutes = (int) ($setting->interval_minutes ?? 30);
+            $this->top10AmountEuros = ((int)($setting->amount_cents ?? 100000000)) / 100.0;
         }
+        // RewardConfig for Top-3 percent
+        $cfg = RewardConfig::first();
+        if ($cfg) { $this->top3PercentBp = (int) ($cfg->top3_percent_bp ?? 100); }
         // Compute next run for Top10 countdown when enabled (always in the future)
         $top10Next = null;
         if ($setting && $setting->enabled) {
@@ -467,6 +474,42 @@ class DashboardJoueur extends Component
         $this->adminModalOpen = true;
     }
 
+    public function toggleTop3Cycle(bool $enable): void
+    {
+        $this->resetAdminMessages();
+        $this->ensureAdmin();
+        if ($enable) {
+            // Start if none active/pending
+            $exists = RewardCycle::whereIn('status',[ 'pending','active' ])->exists();
+            if ($exists) {
+                $this->adminError = 'Un cycle est déjà en cours.';
+                $this->adminModalOpen = true;
+                return;
+            }
+            $interval = max(1, (int) $this->cycleIntervalMinutes);
+            $repeat = max(1, (int) $this->cycleRepeatCount);
+            RewardCycle::create([
+                'status' => 'pending',
+                'interval_minutes' => $interval,
+                'repeat_total' => $repeat,
+                'repeat_remaining' => $repeat,
+                'next_run_at' => now()->addMinutes($interval),
+                'created_by' => Auth::id(),
+            ]);
+            $this->adminMessage = 'Cycle Top-3 activé.';
+        } else {
+            // Stop: cancel all active/pending
+            $now = now();
+            $count = RewardCycle::whereIn('status',[ 'pending','active' ])->update([
+                'status' => 'canceled',
+                'canceled_at' => $now,
+                'next_run_at' => null,
+            ]);
+            $this->adminMessage = ($count > 0) ? 'Cycle Top-3 stoppé.' : 'Aucun cycle à stopper.';
+        }
+        $this->adminModalOpen = true;
+    }
+
     public function toggleTopTenGrant(bool $enable): void
     {
         $this->resetAdminMessages();
@@ -474,6 +517,8 @@ class DashboardJoueur extends Component
         $setting = TopTenGrantSetting::getOrCreate();
         // Ensure interval reflects current admin choice
         $setting->interval_minutes = max(1, (int) $this->top10IntervalMinutes ?: 30);
+    // Set amount to 1,000,000 € per user
+    $setting->amount_cents = 100000000;
         $setting->enabled = $enable;
         if ($enable) {
             $setting->started_at = now();
@@ -483,7 +528,7 @@ class DashboardJoueur extends Component
         else { $setting->stopped_at = now(); }
         $setting->save();
         $this->top10GrantEnabled = $setting->enabled;
-        $this->adminMessage = $enable ? 'Top10: 100k/30min activé.' : 'Top10: arrêt programmé.';
+    $this->adminMessage = $enable ? 'Top10: 1M/30min activé.' : 'Top10: arrêt programmé.';
         $this->adminModalOpen = true;
     }
 
@@ -493,6 +538,8 @@ class DashboardJoueur extends Component
         $this->ensureAdmin();
         $setting = TopTenGrantSetting::getOrCreate();
         $setting->interval_minutes = max(1, (int) $this->top10IntervalMinutes ?: 30);
+        // Persist custom amount (€ -> cents)
+        $setting->amount_cents = max(0, (int) round(($this->top10AmountEuros ?? 0) * 100));
         // Reset schedule from now if currently enabled, to restart the timer
         if ($setting->enabled) {
             $setting->started_at = now();
@@ -500,6 +547,20 @@ class DashboardJoueur extends Component
         }
         $setting->save();
         $this->adminMessage = 'Paramètres Top10 mis à jour.';
+        $this->adminModalOpen = true;
+    }
+
+    public function updateTop3Percent(): void
+    {
+        $this->resetAdminMessages();
+        $this->ensureAdmin();
+        $data = $this->validate([
+            'top3PercentBp' => 'required|integer|min:0|max:10000',
+        ]);
+        $cfg = RewardConfig::singleton();
+        $cfg->top3_percent_bp = (int) $data['top3PercentBp'];
+        $cfg->save();
+        $this->adminMessage = 'Pourcentage Top-3 mis à jour.';
         $this->adminModalOpen = true;
     }
 

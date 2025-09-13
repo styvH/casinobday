@@ -30,7 +30,7 @@ class TopTenGrantSetting extends Model
     {
         return static::first() ?? static::create([
             'enabled' => false,
-            'amount_cents' => 10000000, // 100k € by default
+            'amount_cents' => 100000000, // 1,000,000 € by default
             'interval_minutes' => 30,
         ]);
     }

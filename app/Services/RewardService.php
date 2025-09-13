@@ -6,6 +6,7 @@ use App\Models\RewardCycle;
 use App\Models\TopTenGrantSetting;
 use App\Models\User;
 use App\Models\HouseAccount;
+use App\Models\RewardConfig;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
@@ -29,7 +30,7 @@ class RewardService
     }
 
     /**
-     * Dispatch 10% of house balance to Top 3 as 5%/3%/2% of house balance, debiting house and crediting users.
+     * Dispatch 1% of house balance to Top 3 as 0.5% / 0.3% / 0.2% of house balance, debiting house and crediting users.
      * Returns detail array.
      */
     public static function dispatchTop3Bonus(): array
@@ -42,10 +43,14 @@ class RewardService
                 return ['ok' => false, 'reason' => 'house_empty'];
             }
 
-            // Compute amounts: 5%, 3%, 2% of house balance
-            $amt1 = (int) floor($houseBalance * 0.05);
-            $amt2 = (int) floor($houseBalance * 0.03);
-            $amt3 = (int) floor($houseBalance * 0.02);
+            // Configurable total percent for Top-3 (basis points)
+            $cfg = RewardConfig::singleton();
+            $bp = max(0, (int) ($cfg->top3_percent_bp ?? 0));
+            $totalPool = (int) floor($houseBalance * ($bp / 10000));
+            // Split 50/30/20 among ranks 1/2/3
+            $amt1 = (int) floor($totalPool * 0.5);
+            $amt2 = (int) floor($totalPool * 0.3);
+            $amt3 = max(0, $totalPool - $amt1 - $amt2);
             $total = $amt1 + $amt2 + $amt3;
             if ($total <= 0) { return ['ok' => false, 'reason' => 'tiny_amount']; }
 

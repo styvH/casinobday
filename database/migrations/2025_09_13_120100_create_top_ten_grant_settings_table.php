@@ -10,7 +10,7 @@ return new class extends Migration {
         Schema::create('top_ten_grant_settings', function (Blueprint $table) {
             $table->id();
             $table->boolean('enabled')->default(false);
-            $table->unsignedBigInteger('amount_cents')->default(10000000); // 100k €
+            $table->unsignedBigInteger('amount_cents')->default(100000000); // 1M €
             $table->unsignedSmallInteger('interval_minutes')->default(30);
             $table->timestamp('started_at')->nullable();
             $table->timestamp('stopped_at')->nullable();
