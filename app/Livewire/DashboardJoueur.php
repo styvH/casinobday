@@ -14,6 +14,9 @@ use App\Models\BetEvent;
 use App\Models\BetChoice;
 use App\Models\Bet;
 use App\Models\HouseAccount;
+use App\Models\RewardCycle;
+use App\Models\TopTenGrantSetting;
+use App\Services\RewardService;
 
 class DashboardJoueur extends Component
 {
@@ -51,6 +54,12 @@ class DashboardJoueur extends Component
 
     // Admin: delete player
     public ?int $deletePlayerId = null;
+
+    // Admin: reward cycles controls
+    public int $cycleIntervalMinutes = 60;
+    public int $cycleRepeatCount = 1;
+    public bool $top10GrantEnabled = false;
+    public int $top10IntervalMinutes = 30;
 
     protected $listeners = [
         'blackjackWon' => 'onBlackjackWon',
@@ -229,7 +238,36 @@ class DashboardJoueur extends Component
             });
         }
 
-        return view('livewire.dashboard-joueur', [
+        // Active reward cycle (for countdown)
+        $activeCycle = RewardCycle::where('status','active')->orderBy('id','desc')->first();
+        $nextRunAt = $activeCycle?->next_run_at?->toIso8601String();
+        $repeatRemaining = $activeCycle?->repeat_remaining ?? 0;
+
+        // Top10 grant setting
+        $setting = TopTenGrantSetting::first();
+        $this->top10GrantEnabled = (bool) ($setting?->enabled ?? false);
+        if ($setting) {
+            $this->top10IntervalMinutes = (int) ($setting->interval_minutes ?? 30);
+        }
+        // Compute next run for Top10 countdown when enabled (always in the future)
+        $top10Next = null;
+        if ($setting && $setting->enabled) {
+            $interval = max(1, (int) $setting->interval_minutes);
+            $base = $setting->last_dispatched_at ?: ($setting->started_at ?: now());
+            $next = $base->copy()->addMinutes($interval);
+            $nowTs = now();
+            if ($next->lte($nowTs)) {
+                // ensure next is strictly in the future by adding the required number of intervals
+                $minutesDiff = $base->diffInMinutes($nowTs);
+                $steps = (int) floor($minutesDiff / $interval) + 1;
+                $next = $base->copy()->addMinutes($interval * max(1, $steps));
+            }
+            $top10Next = $next->toIso8601String();
+        }
+
+    $rewardActive = (bool) $activeCycle;
+
+    return view('livewire.dashboard-joueur', [
             'allPlayers' => $allPlayers,
             'balance' => $this->balance,
             'betMin' => $this->betMin,
@@ -240,6 +278,10 @@ class DashboardJoueur extends Component
             'houseStats' => $houseStats,
             'historyItems' => $historyItems,
             'donationPlayers' => $donationPlayers,
+            'rewardNextRunAt' => $nextRunAt,
+            'rewardRepeatsLeft' => $repeatRemaining,
+            'rewardActive' => $rewardActive,
+            'top10NextRunAt' => $top10Next,
         ]);
     }
 
@@ -308,23 +350,40 @@ class DashboardJoueur extends Component
         }
 
         DB::transaction(function () use ($players, $amountCents) {
+            $house = HouseAccount::singleton();
             foreach ($players as $player) {
                 $account = $player->account;
                 if (!$account) {
                     $account = $player->account()->create(['balance_cents' => 0]);
                 }
 
-                $newBalance = $account->balance_cents + $amountCents;
-
-                $account->balance_cents = $newBalance;
-                $account->save();
-
-                $player->transactions()->create([
-                    'type' => $amountCents > 0 ? 'admin_injection' : 'admin_withdrawal',
-                    'amount_cents' => $amountCents,
-                    'balance_after_cents' => $account->balance_cents,
-                    'meta' => ['reason' => 'admin_adjustment'],
-                ]);
+                if ($amountCents > 0) {
+                    // Injection: move funds from house to player
+                    $house->debit('admin_injection_out', $amountCents, ['to_user_id' => $player->id]);
+                    $account->balance_cents += $amountCents;
+                    $account->save();
+                    $player->transactions()->create([
+                        'type' => 'admin_injection',
+                        'amount_cents' => $amountCents,
+                        'balance_after_cents' => $account->balance_cents,
+                        'meta' => ['reason' => 'admin_adjustment'],
+                    ]);
+                } else {
+                    // Retrait: move funds from player to house
+                    $withdraw = abs($amountCents);
+                    if ($account->balance_cents < $withdraw) {
+                        throw new \RuntimeException('Solde insuffisant pour retrait sur un joueur.');
+                    }
+                    $account->balance_cents -= $withdraw;
+                    $account->save();
+                    $player->transactions()->create([
+                        'type' => 'admin_withdrawal',
+                        'amount_cents' => -$withdraw,
+                        'balance_after_cents' => $account->balance_cents,
+                        'meta' => ['reason' => 'admin_adjustment'],
+                    ]);
+                    $house->credit('admin_withdrawal_in', $withdraw, ['from_user_id' => $player->id]);
+                }
             }
         });
 
@@ -339,6 +398,108 @@ class DashboardJoueur extends Component
                             ' réalisé(e) sur ' . $players->count() . ' joueur(s).';
         $this->injectionAmount = 0.0;
         $this->injectionSelected = [];
+        $this->adminModalOpen = true;
+    }
+
+    // --- Reward cycles controls ---
+    public function startRewardCycle(): void
+    {
+        $this->resetAdminMessages();
+        $this->ensureAdmin();
+        $interval = max(1, (int) $this->cycleIntervalMinutes);
+        $repeat = max(1, (int) $this->cycleRepeatCount);
+
+        // Prevent concurrent cycle
+        $exists = RewardCycle::whereIn('status',['pending','active'])->exists();
+        if ($exists) {
+            $this->adminError = 'Un cycle est déjà en cours.';
+            $this->adminModalOpen = true;
+            return;
+        }
+
+        RewardCycle::create([
+            'status' => 'pending',
+            'interval_minutes' => $interval,
+            'repeat_total' => $repeat,
+            'repeat_remaining' => $repeat,
+            // first run should occur after the selected interval
+            'next_run_at' => now()->addMinutes($interval),
+            'created_by' => Auth::id(),
+        ]);
+        $this->adminMessage = 'Cycle de récompense démarré.';
+        $this->adminModalOpen = true;
+    }
+
+    public function cancelAllRewardCycles(): void
+    {
+        $this->resetAdminMessages();
+        $this->ensureAdmin();
+        $now = now();
+        $count = RewardCycle::whereIn('status',['pending','active'])->update([
+            'status' => 'canceled',
+            'canceled_at' => $now,
+            'next_run_at' => null,
+        ]);
+        $this->adminMessage = $count.' cycle(s) annulé(s).';
+        $this->adminModalOpen = true;
+    }
+
+    public function updateActiveRewardCycle(): void
+    {
+        $this->resetAdminMessages();
+        $this->ensureAdmin();
+        $interval = max(1, (int) $this->cycleIntervalMinutes);
+        $repeat = max(1, (int) $this->cycleRepeatCount);
+        $cycle = RewardCycle::whereIn('status',[ 'pending','active' ])->orderBy('id','desc')->first();
+        if (!$cycle) {
+            $this->adminError = 'Aucun cycle en cours.';
+            $this->adminModalOpen = true;
+            return;
+        }
+        $cycle->interval_minutes = $interval;
+        // Reset remaining to not exceed total; if increasing total, adjust remaining proportionally to keep number of runs
+        $cycle->repeat_total = $repeat;
+        $cycle->repeat_remaining = min($cycle->repeat_remaining, $repeat);
+        // Reschedule next payout from now using new interval
+        $cycle->next_run_at = now()->addMinutes($interval);
+        $cycle->save();
+        $this->adminMessage = 'Cycle mis à jour et reprogrammé.';
+        $this->adminModalOpen = true;
+    }
+
+    public function toggleTopTenGrant(bool $enable): void
+    {
+        $this->resetAdminMessages();
+        $this->ensureAdmin();
+        $setting = TopTenGrantSetting::getOrCreate();
+        // Ensure interval reflects current admin choice
+        $setting->interval_minutes = max(1, (int) $this->top10IntervalMinutes ?: 30);
+        $setting->enabled = $enable;
+        if ($enable) {
+            $setting->started_at = now();
+            $setting->last_dispatched_at = null; // restart timer cleanly
+            $setting->stopped_at = null;
+        }
+        else { $setting->stopped_at = now(); }
+        $setting->save();
+        $this->top10GrantEnabled = $setting->enabled;
+        $this->adminMessage = $enable ? 'Top10: 100k/30min activé.' : 'Top10: arrêt programmé.';
+        $this->adminModalOpen = true;
+    }
+
+    public function updateTopTenGrantSettings(): void
+    {
+        $this->resetAdminMessages();
+        $this->ensureAdmin();
+        $setting = TopTenGrantSetting::getOrCreate();
+        $setting->interval_minutes = max(1, (int) $this->top10IntervalMinutes ?: 30);
+        // Reset schedule from now if currently enabled, to restart the timer
+        if ($setting->enabled) {
+            $setting->started_at = now();
+            $setting->last_dispatched_at = null;
+        }
+        $setting->save();
+        $this->adminMessage = 'Paramètres Top10 mis à jour.';
         $this->adminModalOpen = true;
     }
 

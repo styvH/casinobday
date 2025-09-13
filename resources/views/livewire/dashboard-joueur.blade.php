@@ -24,6 +24,17 @@
 @php /* Les anciennes valeurs fictives ont été remplacées par des données réelles */ @endphp
 
 <div class="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-red-900 via-black to-red-700 text-white">
+    @php $hasRewardCountdown = !empty($rewardNextRunAt ?? null) && !empty($rewardActive ?? false); @endphp
+    @if($hasRewardCountdown)
+    <!-- Chrono récompense Top-3 (secret si jamais vu): visible seulement quand actif) -->
+    <div id="rewardCountdown" class="fixed top-4 left-1/2 -translate-x-1/2 z-40">
+        <div class="px-4 py-2 rounded-xl border-2 border-yellow-500 bg-black/70 text-center shadow-xl">
+            <div class="text-xs text-yellow-300 uppercase tracking-wider">Prochaine récompense Top 3</div>
+            <div class="text-2xl md:text-3xl font-extrabold text-yellow-400"><span id="rewardCountdownTimer">--:--</span></div>
+            <div class="text-[10px] text-gray-300">Cycles restants: <span id="rewardRepeatsLeft">{{ (int)($rewardRepeatsLeft ?? 0) }}</span></div>
+        </div>
+    </div>
+    @endif
 @php /* Le composant Livewire fournit $leaderboard: top 50 users triés par solde */ @endphp
     <!-- Bouton mobile afficher classement -->
     <button id="toggleClassementMobile" class="md:hidden fixed bottom-4 right-4 z-50 bg-red-700 hover:bg-red-800 text-white font-semibold px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
@@ -59,6 +70,15 @@
                     @endif
                 @endforeach
             </ul>
+            @php $hasTop10Countdown = !empty($top10NextRunAt ?? null); @endphp
+            @if($hasTop10Countdown)
+                <div class="px-6 py-2">
+                    <div class="flex items-center justify-between p-2 rounded-lg bg-black/60 border border-yellow-700">
+                        <div class="text-xs text-yellow-300">100k aux Top-10 dans</div>
+                        <div class="text-lg font-extrabold text-yellow-400" id="top10Countdown">--:--</div>
+                    </div>
+                </div>
+            @endif
             <details class="px-6 py-2">
                 <summary class="cursor-pointer text-red-400 hover:underline">Voir le reste du classement</summary>
                 <ul class="mt-2">
@@ -225,6 +245,12 @@
         @endphp
         <script id="historyData" type="application/json">{!! json_encode($historyPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
     <div id="playerMeta" data-balance="{{ (float)($balance ?? 0) }}" data-lw-id="{{ $_instance->id ?? '' }}" class="hidden"></div>
+    @if($hasRewardCountdown)
+    <div id="rewardMeta" data-next-run="{{ $rewardNextRunAt }}" class="hidden"></div>
+    @endif
+    @if(!empty($top10NextRunAt ?? null))
+    <div id="top10Meta" data-next-run="{{ $top10NextRunAt }}" class="hidden"></div>
+    @endif
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const btn = document.getElementById('toggleClassementMobile');
@@ -243,6 +269,52 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+@if($hasRewardCountdown)
+<script>
+// Compte à rebours pour la récompense Top-3
+(function(){
+    const meta = document.getElementById('rewardMeta');
+    const timerEl = document.getElementById('rewardCountdownTimer');
+    if(!meta || !timerEl) return;
+    const targetStr = meta.getAttribute('data-next-run');
+    if(!targetStr) return;
+    const target = new Date(targetStr);
+    function pad(n){ return n<10?('0'+n):String(n); }
+    function tick(){
+        const now = new Date();
+        let diff = Math.floor((target.getTime() - now.getTime())/1000);
+        if (diff <= 0) { timerEl.textContent = '00:00'; return; }
+        const m = Math.floor(diff/60); const s = diff%60;
+        timerEl.textContent = pad(m)+':'+pad(s);
+    }
+    tick();
+    setInterval(tick, 1000);
+})();
+</script>
+@endif
+@if(!empty($top10NextRunAt ?? null))
+<script>
+// Compte à rebours Top-10 100k
+(function(){
+    const meta = document.getElementById('top10Meta');
+    const el = document.getElementById('top10Countdown');
+    if(!meta || !el) return;
+    const targetStr = meta.getAttribute('data-next-run');
+    if(!targetStr) return;
+    const target = new Date(targetStr);
+    function pad(n){ return n<10?('0'+n):String(n); }
+    function tick(){
+        const now = new Date();
+        let diff = Math.floor((target.getTime() - now.getTime())/1000);
+        if (diff <= 0) { el.textContent = '00:00'; return; }
+        const m = Math.floor(diff/60); const s = diff%60;
+        el.textContent = pad(m)+':'+pad(s);
+    }
+    tick();
+    setInterval(tick, 1000);
+})();
+</script>
+@endif
 <!-- Modal Liste des Paris -->
 <div id="modalListeParis" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
     <div class="w-11/12 md:w-3/4 lg:w-1/2 max-h-[85vh] overflow-hidden bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-2xl shadow-2xl flex flex-col">
@@ -758,6 +830,62 @@ document.addEventListener('DOMContentLoaded', function() {
             </form>
         </div>
 
+        <div class="h-px bg-red-900/60"></div>
+
+        <div class="space-y-2">
+            <h4 class="text-sm font-semibold text-red-300 flex items-center gap-2">⏱️ Récompenses cycliques Top-3</h4>
+            <div class="flex items-center gap-2 text-xs">
+                <span>Statut:
+                    @if(!empty($rewardActive))
+                        <span class="text-emerald-400 font-semibold">Activé</span>
+                    @else
+                        <span class="text-gray-400">Désactivé</span>
+                    @endif
+                </span>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                    <label class="block mb-1 text-gray-300">Intervalle (minutes)</label>
+                    <input type="number" min="1" wire:model.defer="cycleIntervalMinutes" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-600" />
+                </div>
+                <div>
+                    <label class="block mb-1 text-gray-300">Nombre d'exécutions</label>
+                    <input type="number" min="1" wire:model.defer="cycleRepeatCount" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-600" />
+                </div>
+            </div>
+            <div class="flex items-center gap-2 mt-2">
+                <button type="button" wire:click="startRewardCycle" class="px-3 py-2 rounded-lg bg-amber-700 hover:bg-amber-800 text-xs font-semibold">Démarrer le cycle</button>
+                <button type="button" wire:click="updateActiveRewardCycle" class="px-3 py-2 rounded-lg bg-amber-900 hover:bg-amber-800 text-xs font-semibold">Mettre à jour le cycle</button>
+                <button type="button" id="cancelCyclesBtn" class="px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-xs font-semibold">Annuler cycles</button>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-1">Verse 10% du solde maison: 5%/3%/2% aux Top 3 à chaque exécution.</p>
+        </div>
+
+        <div class="h-px bg-red-900/60"></div>
+
+        <div class="space-y-2">
+            <h4 class="text-sm font-semibold text-red-300 flex items-center gap-2">🏦 Top-10: 100k toutes les 30 min</h4>
+            <div class="flex items-center gap-2 text-xs">
+                <span>Statut:
+                    @if($top10GrantEnabled)
+                        <span class="text-emerald-400 font-semibold">Activé</span>
+                    @else
+                        <span class="text-gray-400">Désactivé</span>
+                    @endif
+                </span>
+                <button type="button" wire:click="toggleTopTenGrant({{ $top10GrantEnabled ? 'false' : 'true' }})" class="px-3 py-1 rounded bg-indigo-700 hover:bg-indigo-800">@if($top10GrantEnabled) Stopper @else Activer @endif</button>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-xs mt-2">
+                <div>
+                    <label class="block mb-1 text-gray-300">Intervalle Top-10 (min)</label>
+                    <input type="number" min="1" wire:model="top10IntervalMinutes" class="w-full bg-black/60 border border-red-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-600" />
+                </div>
+                <div class="flex items-end">
+                    <button type="button" wire:click="updateTopTenGrantSettings" class="px-3 py-2 rounded bg-gray-700 hover:bg-gray-600">Enregistrer</button>
+                </div>
+            </div>
+        </div>
+
         <div class="space-y-4">
             <h4 class="text-sm font-semibold text-red-300 flex items-center gap-2">🗑️ Supprimer un joueur</h4>
             <form wire:submit.prevent="adminDeletePlayer" class="space-y-4">
@@ -799,6 +927,43 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 </div>
 @endif
+<!-- Modal confirmation annulation cycles -->
+<div id="modalConfirmCancelCycles" class="fixed inset-0 z-[71] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div class="w-11/12 max-w-sm bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-xl shadow-2xl p-6 flex flex-col gap-4">
+        <h3 class="text-lg font-bold text-red-400">Annuler tous les cycles ?</h3>
+        <p class="text-xs text-gray-300">Cette action arrêtera toutes les exécutions planifiées en cours.</p>
+        <div class="flex justify-end gap-2 mt-2">
+            <button data-close="modalConfirmCancelCycles" class="px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 text-xs">Non</button>
+            <button id="confirmCancelCyclesBtn" class="px-4 py-2 rounded bg-red-700 hover:bg-red-800 text-xs font-semibold">Oui, annuler</button>
+        </div>
+    </div>
+</div>
+<script>
+// Admin extras: cancel reward cycles and toggle top10 grants
+(function(){
+    const lwId = document.getElementById('playerMeta')?.getAttribute('data-lw-id');
+    const cancelBtn = document.getElementById('cancelCyclesBtn');
+    const modal = document.getElementById('modalConfirmCancelCycles');
+    const confirmBtn = document.getElementById('confirmCancelCyclesBtn');
+    function open(m){ m && m.classList.remove('hidden'); m && m.classList.add('flex'); }
+    function close(m){ m && m.classList.add('hidden'); m && m.classList.remove('flex'); }
+    document.querySelectorAll('[data-close="modalConfirmCancelCycles"]').forEach(el=>{
+        el.addEventListener('click', ()=> close(modal));
+    });
+    if(cancelBtn){ cancelBtn.addEventListener('click', () => open(modal)); }
+    if(confirmBtn){
+        confirmBtn.addEventListener('click', () => {
+            const comp = lwId && window.Livewire ? window.Livewire.find(lwId) : null;
+            comp && comp.call('cancelAllRewardCycles');
+        // Hide countdown immediately on client
+        const rw = document.getElementById('rewardCountdown');
+        rw && rw.remove();
+            close(modal);
+        });
+    }
+    // Top-10 buttons now use Livewire wire:click for reliable re-rendering
+})();
+</script>
 <div id="modalLogout" class="fixed inset-0 z-[59] hidden items-center justify-center bg-black/70 backdrop-blur-sm">
     <div class="w-11/12 max-w-sm bg-gradient-to-b from-gray-900 to-black border border-red-700 rounded-xl shadow-2xl p-6 flex flex-col gap-5">
         <div class="flex items-start gap-3">

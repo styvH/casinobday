@@ -12,7 +12,15 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        // Process reward cycles every minute
+        $schedule->call(function(){
+            \App\Services\RewardService::processRewardCycles();
+        })->everyMinute();
+
+        // Process Top10 100k grants every minute (internal logic enforces 30min interval)
+        $schedule->call(function(){
+            \App\Services\RewardService::processTopTenGrant();
+        })->everyMinute();
     }
 
     /**
