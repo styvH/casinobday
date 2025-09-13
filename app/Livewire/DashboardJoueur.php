@@ -20,6 +20,7 @@ use App\Models\RewardConfig;
 use App\Services\RewardService;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\WelcomeMail;
+use Illuminate\Support\Facades\Password;
 
 class DashboardJoueur extends Component
 {
@@ -333,11 +334,13 @@ class DashboardJoueur extends Component
             $createdUser = User::where('email', $data['newPlayerEmail'])->first();
             if ($createdUser) {
                 Mail::to($createdUser->email)->send(new WelcomeMail($createdUser));
+        // Envoyer un lien de définition de mot de passe (réinitialisation)
+        Password::sendResetLink(['email' => $createdUser->email]);
             }
         } catch (\Throwable $e) {
             // ne pas interrompre le flux admin si le mail échoue
         }
-        $this->adminMessage = 'Joueur créé avec succès.';
+    $this->adminMessage = 'Joueur créé avec succès. Un email d\'invitation à définir le mot de passe a été envoyé.';
         $this->reset(['newPlayerName','newPlayerEmail','newPlayerPassword']);
         $this->newPlayerBalance = 1000.0;
     $this->adminModalOpen = true;
