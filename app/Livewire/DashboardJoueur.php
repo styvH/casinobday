@@ -349,7 +349,7 @@ class DashboardJoueur extends Component
 
         $event = BetEvent::with('choices')->find($eventId);
         if(!$event){ throw ValidationException::withMessages(['bet' => 'Événement introuvable']); }
-        if(!in_array($event->status, ['disponible','en_cours','annonce'])){
+        if(!in_array($event->status, ['disponible','en_cours','annonce', 'ferme'])){
             throw ValidationException::withMessages(['bet' => 'Événement fermé']);
         }
         $choice = $event->choices->firstWhere('id', $choiceId);

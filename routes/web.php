@@ -18,6 +18,7 @@ use App\Livewire\HomePage;
 Route::get('/', HomePage::class)->name('home');
 
 use App\Livewire\DashboardJoueur;
+use App\Livewire\BetMaster;
 use App\Livewire\Auth\CheckIn;
 use Illuminate\Support\Facades\Auth;
 
@@ -25,6 +26,7 @@ Route::get('/check-in', CheckIn::class)->name('login');
 
 Route::middleware(['auth'])->group(function(){
 	Route::get('/player/dashboard', DashboardJoueur::class)->name('dashboard.joueur');
+	Route::get('/betmaster', BetMaster::class)->name('bet.master');
     
 	Route::post('/logout', function(){
 		Auth::logout();

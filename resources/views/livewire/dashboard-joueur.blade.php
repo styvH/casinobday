@@ -239,11 +239,10 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="px-5 pt-4 flex flex-wrap gap-2 text-xs md:text-sm">
             <button class="filter-pari active bg-red-700 hover:bg-red-800 text-white px-3 py-1 rounded-full" data-filter="tous">Tous</button>
             <button class="filter-pari bg-gray-800 hover:bg-gray-700 text-red-300 px-3 py-1 rounded-full" data-filter="disponible">Disponibles</button>
-            <button class="filter-pari bg-gray-800 hover:bg-gray-700 text-red-300 px-3 py-1 rounded-full" data-filter="annonce">Annoncés</button>
-            <button class="filter-pari bg-gray-800 hover:bg-gray-700 text-red-300 px-3 py-1 rounded-full" data-filter="en_cours">En cours</button>
+            <button class="filter-pari bg-gray-800 hover:bg-gray-700 text-red-300 px-3 py-1 rounded-full" data-filter="ferme">Fermé</button>
             <button id="openNewBetBtn" class="ml-auto bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1 rounded-full font-semibold">+ Nouveau pari</button>
         </div>
-        <div class="px-5 pb-4 text-[10px] md:text-xs text-gray-400 italic">(Données fictives pour test)</div>
+        <div class="px-5 pb-4 text-[10px] md:text-xs text-gray-400 italic">(Bonne chance)</div>
         <div class="flex-1 overflow-y-auto classement-scrollbar px-5 pb-5" id="listeParisContainer"></div>
         <div class="px-5 py-3 border-t border-red-800 flex justify-end bg-black/40">
             <button data-close="modalListeParis" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm font-semibold">Fermer</button>
@@ -1007,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function badgeType(t){
-        const map = { disponible:['Disponible','bg-green-700/50 text-green-300'], annonce:['Annoncé','bg-yellow-700/40 text-yellow-300'], en_cours:['En cours','bg-blue-700/40 text-blue-300'] };
+        const map = { disponible:['Disponible','bg-green-700/50 text-green-300'], ferme:['Fermé','bg-red-700/40 text-red-300'], cloture:['Clôturé','bg-gray-700/40 text-gray-300'] };
         return map[t] || ['Autre','bg-gray-600/40 text-gray-300'];
     }
 
