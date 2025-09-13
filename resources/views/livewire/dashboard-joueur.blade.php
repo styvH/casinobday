@@ -210,6 +210,19 @@
             'delta' => (int) ($houseStats['delta'] ?? 0),
         ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
         @endif
+        @php
+            $historyPayload = ($historyItems ?? collect())->map(function($h){
+                return [
+                    'id' => (int) ($h['id'] ?? 0),
+                    'type' => (string) ($h['type'] ?? 'transaction'),
+                    'icon' => (string) ($h['icon'] ?? '💰'),
+                    'amount' => (float) ($h['amount'] ?? 0),
+                    'desc' => (string) ($h['desc'] ?? ''),
+                    'ts' => (int) ($h['ts'] ?? 0),
+                ];
+            })->values();
+        @endphp
+        <script id="historyData" type="application/json">{!! json_encode($historyPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
     <div id="playerMeta" data-balance="{{ (float)($balance ?? 0) }}" class="hidden"></div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -817,7 +830,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <button data-h-filter="blackjack" class="hist-filter bg-gray-800 hover:bg-gray-700 text-red-300 px-3 py-1 rounded-full">Blackjack</button>
                 <button data-h-filter="transaction" class="hist-filter bg-gray-800 hover:bg-gray-700 text-red-300 px-3 py-1 rounded-full">Transactions</button>
         </div>
-        <div class="px-5 pb-3 text-[10px] md:text-xs text-gray-400 italic">Dernières activités simulées (front uniquement).</div>
+    <div class="px-5 pb-3 text-[10px] md:text-xs text-gray-400 italic">Dernières activités (données réelles).</div>
         <div id="historyList" class="flex-1 overflow-y-auto classement-scrollbar px-5 pb-4 divide-y divide-red-800/30 text-sm"></div>
         <div class="px-5 py-3 border-t border-red-800 bg-black/60 flex items-center justify-between">
                 <button id="historyShowMoreBtn" class="px-4 py-1.5 rounded-lg bg-black/70 border border-red-700 text-red-300 hover:bg-red-800/40 hover:text-white text-xs font-semibold">Afficher plus</button>
@@ -1204,40 +1217,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // bjFinished true = aucune main en cours ou main terminée => fermeture autorisée
     let bjFinished = true;
     const blackjackCloseBtn = document.getElementById('blackjackCloseBtn');
-    // Historique state
+    // Historique state (real data from backend)
     const HISTORY_PAGE_SIZE = 10;
     let historyVisibleCount = HISTORY_PAGE_SIZE;
     let historyCurrentFilter = 'tous';
-    // Mock history dataset (newest first)
-    const mockHistory = (()=>{
-        const types = ['pari','blackjack','transaction'];
-        const icons = { pari:'🎲', blackjack:'🃏', transaction:'💰' };
-        const arr = [];
-        const now = Date.now();
-        for(let i=0;i<36;i++){
-            const type = types[i%types.length];
-            let amount = 0; let desc='';
-            if(type==='pari'){
-                amount = (Math.random()>0.5?1:-1) * (500+Math.floor(Math.random()*4500));
-                desc = 'Pari '+(amount>0?'gagné':'perdu')+' sur événement #'+(100+i);
-            } else if(type==='blackjack'){
-                amount = (Math.random()>0.55?1:-1) * (200+Math.floor(Math.random()*3000));
-                desc = 'Blackjack '+(amount>0?'victoire':'défaite');
-            } else {
-                amount = (Math.random()>0.5?1:-1) * (100+Math.floor(Math.random()*2000));
-                desc = amount>0? 'Crédit bonus': 'Achat jetons';
-            }
-            arr.push({
-                id:i+1,
-                type,
-                icon: icons[type],
-                amount,
-                desc,
-                ts: now - i* 1000*60* (5+Math.random()*20)
-            });
-        }
-        return arr; // Already newest first by construction
-    })();
+    const historyDataEl = document.getElementById('historyData');
+    const __history = historyDataEl ? JSON.parse(historyDataEl.textContent || '[]') : [];
 
     function formatDate(ts){
         const d = new Date(ts);
@@ -1248,8 +1233,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return sign + a.toLocaleString('fr-FR') + ' €';
     }
     function historyFiltered(){
-        if(historyCurrentFilter==='tous') return mockHistory;
-        return mockHistory.filter(h=>h.type===historyCurrentFilter);
+        if(historyCurrentFilter==='tous') return __history;
+        return __history.filter(h=>h.type===historyCurrentFilter);
     }
     function renderHistory(){
         if(!historyList) return;
@@ -1450,17 +1435,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const amount = parseFloat(donationAmount.value)||0;
         if(!donationRecipient){ return setDonationError('Sélectionnez un destinataire'); }
         if(amount <= 0){ return setDonationError('Montant invalide'); }
-        // Append to history (front only)
-        mockHistory.unshift({
-            id: mockHistory.length+1,
-            type: 'transaction',
-            icon: '💝',
-            amount: -amount,
-            desc: 'Don à '+donationRecipient.pseudo,
-            ts: Date.now()
-        });
-        // Reset filter to show added item if already open
-        resetHistory();
         alert('(Démo) Don envoyé à '+donationRecipient.pseudo+' de '+amount.toLocaleString('fr-FR')+' €');
         closeModal(modalDonation);
     });

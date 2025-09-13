@@ -111,8 +111,8 @@ class DashboardJoueur extends Component
                 $ch->total_bet_cents = (int) ($choiceSums[$ch->id] ?? 0);
             }
         }
-        $user = Auth::user();
-        $userActiveBets = collect();
+    $user = Auth::user();
+    $userActiveBets = collect();
         if ($user) {
             $userActiveBets = Bet::with(['event','choice'])
                 ->where('user_id', $user->id)
@@ -130,6 +130,89 @@ class DashboardJoueur extends Component
             ];
         }
 
+        // Build DB-backed history for the current user (transactions => unified timeline)
+        $historyItems = collect();
+        if ($user) {
+            $txs = \App\Models\Transaction::where('user_id', $user->id)
+                ->orderByDesc('created_at')
+                ->limit(200)
+                ->get();
+
+            // Collect referenced bet events / choices from transaction meta for nicer labels
+            $eventIds = [];
+            $choiceIds = [];
+            foreach ($txs as $t) {
+                $meta = is_array($t->meta) ? $t->meta : [];
+                if (!empty($meta['bet_event_id'])) { $eventIds[] = (int) $meta['bet_event_id']; }
+                if (!empty($meta['bet_choice_id'])) { $choiceIds[] = (int) $meta['bet_choice_id']; }
+            }
+            $eventsById = $eventIds ? BetEvent::whereIn('id', array_unique($eventIds))->get()->keyBy('id') : collect();
+            $choicesById = $choiceIds ? BetChoice::whereIn('id', array_unique($choiceIds))->get()->keyBy('id') : collect();
+
+            $historyItems = $txs->map(function($t) use ($eventsById, $choicesById) {
+                $type = (string) $t->type;
+                $meta = is_array($t->meta) ? $t->meta : [];
+                $desc = '';
+                $category = 'transaction';
+                $icon = '💰';
+
+                // Resolve bet event / choice labels if present
+                $evTitle = null; $choiceLabel = null; $choiceCode = null;
+                if (!empty($meta['bet_event_id'])) {
+                    $ev = $eventsById->get((int) $meta['bet_event_id']);
+                    if ($ev) { $evTitle = $ev->title ?? ('Événement #'.$ev->id); }
+                }
+                if (!empty($meta['bet_choice_id'])) {
+                    $ch = $choicesById->get((int) $meta['bet_choice_id']);
+                    if ($ch) { $choiceLabel = $ch->label ?? null; $choiceCode = $ch->code ?? null; }
+                }
+
+                // Categorize and describe
+                if (str_starts_with($type, 'blackjack_')) {
+                    $category = 'blackjack';
+                    $icon = '🃏';
+                    if ($type === 'blackjack_bet') { $desc = 'Mise Blackjack'; }
+                    elseif ($type === 'blackjack_win') { $desc = 'Gain Blackjack'; }
+                    elseif ($type === 'blackjack_loss') { $desc = 'Perte Blackjack'; }
+                    else { $desc = ucfirst(str_replace('_',' ',$type)); }
+                } elseif (in_array($type, ['bet_place','bet_win','bet_loss'], true)) {
+                    $category = 'pari';
+                    $icon = '🎲';
+                    if ($type === 'bet_place') {
+                        $desc = 'Mise sur '.($evTitle ?? 'événement').($choiceLabel ? ' — '.$choiceLabel : ($choiceCode ? ' — '.$choiceCode : ''));
+                    } elseif ($type === 'bet_win') {
+                        $desc = 'Gain pari sur '.($evTitle ?? 'événement');
+                    } else {
+                        $desc = 'Perte pari sur '.($evTitle ?? 'événement');
+                    }
+                } else {
+                    // Generic transactions
+                    $map = [
+                        'deposit' => 'Dépôt',
+                        'transfer_in' => 'Transfert entrant',
+                        'transfer_out' => 'Transfert sortant',
+                        'adjustment' => 'Ajustement',
+                        'admin_injection' => 'Crédit administrateur',
+                        'admin_withdrawal' => 'Retrait administrateur',
+                        'initial_credit' => 'Crédit initial',
+                    ];
+                    $desc = $map[$type] ?? ucfirst(str_replace('_',' ', $type));
+                }
+
+                // created_at in ms for front formatting
+                $ts = $t->created_at ? $t->created_at->valueOf() : now()->valueOf();
+
+                return [
+                    'id' => (int) $t->id,
+                    'type' => $category,
+                    'icon' => $icon,
+                    'amount' => (float) $t->amount, // euros (signed)
+                    'desc' => $desc,
+                    'ts' => (int) $ts,
+                ];
+            });
+        }
+
         return view('livewire.dashboard-joueur', [
             'allPlayers' => $allPlayers,
             'balance' => $this->balance,
@@ -139,6 +222,7 @@ class DashboardJoueur extends Component
             'betEvents' => $betEvents,
             'userActiveBets' => $userActiveBets,
             'houseStats' => $houseStats,
+            'historyItems' => $historyItems,
         ]);
     }
 
