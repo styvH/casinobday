@@ -38,6 +38,34 @@
         </div>
 
         <div class="space-y-4">
+            @if(isset($pgames) && $pgames->count())
+                <div class="border border-emerald-800 rounded p-3 bg-neutral-900 text-gray-100">
+                    <div class="text-emerald-300 font-semibold mb-2">🧩 Parties physiques (Admin)</div>
+                    <div class="space-y-2">
+                        @foreach($pgames as $g)
+                            <div class="p-3 rounded border {{ $g->status==='active' ? 'border-emerald-700' : 'border-neutral-700' }} bg-black/40">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <div class="font-semibold text-emerald-200">#{{ $g->id }} - {{ $g->name }}</div>
+                                        <div class="text-xs text-gray-400">Statut: {{ $g->status }} | Mise {{ number_format($g->stake_cents/100,0,',',' ') }} € | Pot {{ number_format($g->pot_cents/100,0,',',' ') }} €</div>
+                                        <div class="text-[11px] text-gray-400 mt-1">Participants: {{ $g->participants->pluck('user.name')->filter()->join(', ') }}</div>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button wire:click="settlePhysicalGame({{ $g->id }}, null, true)" class="px-3 py-1 rounded border border-red-700 text-red-200 bg-black hover:bg-neutral-950">Annuler</button>
+                                    </div>
+                                </div>
+                                @if($g->status==='active')
+                                    <div class="mt-2 flex flex-wrap gap-2">
+                                        @foreach($g->participants as $p)
+                                            <button wire:click="settlePhysicalGame({{ $g->id }}, {{ $p->user_id }}, false)" class="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-800 text-white text-xs">Gagnant: {{ optional($p->user)->name ?? ('#'.$p->user_id) }}</button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
             @forelse($events as $event)
                 @php
                     $isFerme = $event->status === 'ferme';

@@ -18,6 +18,8 @@ use App\Models\RewardCycle;
 use App\Models\TopTenGrantSetting;
 use App\Models\RewardConfig;
 use App\Services\RewardService;
+use App\Models\PhysicalGame;
+use App\Models\PhysicalGameParticipant;
 
 class DashboardJoueur extends Component
 {
@@ -67,6 +69,10 @@ class DashboardJoueur extends Component
     protected $listeners = [
         'blackjackWon' => 'onBlackjackWon',
     'blackjackBetPlaced' => 'onBlackjackBetPlaced',
+    // Physical games browser events
+    'pg-create' => 'createPhysicalGame',
+    'pg-pick' => 'pickWinner',
+    'pg-resolve' => 'resolvePhysicalGame',
     ];
 
     public function mount(): void
@@ -106,9 +112,12 @@ class DashboardJoueur extends Component
         $donationPlayers = collect();
         $current = Auth::user();
         if ($current instanceof User) {
-            $donationPlayers = User::where('id', '!=', $current->id)
-                ->orderBy('name')
-                ->select('id','name')
+            // include balances for stake limit computations in physical game creation
+            $donationPlayers = User::query()
+                ->leftJoin('user_accounts', 'user_accounts.user_id', '=', 'users.id')
+                ->where('users.id', '!=', $current->id)
+                ->orderBy('users.name')
+                ->select('users.id','users.name', DB::raw('COALESCE(user_accounts.balance_cents, 0) as balance_cents'))
                 ->get();
         }
         // Classement des joueurs par solde (balance_cents) décroissant
@@ -274,6 +283,25 @@ class DashboardJoueur extends Component
 
     $rewardActive = (bool) $activeCycle;
 
+        // Active physical games for current user (participant or betmaster)
+        $physicalGames = collect();
+        if ($user) {
+            $physicalGames = PhysicalGame::query()
+                ->with(['participants.user'])
+                ->where('status','active')
+                ->where(function($q) use ($user){
+                    $q->where('betmaster_id', $user->id)
+                      ->orWhereIn('id', function($sub) use ($user){
+                          $sub->select('physical_game_id')
+                              ->from('physical_game_participants')
+                              ->where('user_id', $user->id);
+                      });
+                })
+                ->orderByDesc('id')
+                ->limit(50)
+                ->get();
+        }
+
     return view('livewire.dashboard-joueur', [
             'allPlayers' => $allPlayers,
             'balance' => $this->balance,
@@ -282,6 +310,7 @@ class DashboardJoueur extends Component
             'leaderboard' => $leaderboard,
             'betEvents' => $betEvents,
             'userActiveBets' => $userActiveBets,
+            'physicalGames' => $physicalGames,
             'houseStats' => $houseStats,
             'historyItems' => $historyItems,
             'donationPlayers' => $donationPlayers,
@@ -960,6 +989,233 @@ class DashboardJoueur extends Component
                     'participants_count' => 0,
                 ]);
             }
+        });
+    }
+
+    /**
+     * Create a physical game with equal per-player stake.
+     * name: string, description?: string, participantIds: int[], betmasterId?: int, stakeEuros: float
+     * Rules: min stake 10k, max = min balance among participants; 10% house commission collected upfront.
+     */
+    public function createPhysicalGame(string $name, ?string $description, array $participantIds, ?int $betmasterId, float $stakeEuros): void
+    {
+        $creator = Auth::user();
+        if(!$creator instanceof User){ return; }
+
+        $name = trim($name);
+        if($name === ''){ $this->dispatch('pg-error', message: 'Nom requis'); return; }
+        if(empty($participantIds)){ $this->dispatch('pg-error', message: 'Sélectionnez au moins un joueur'); return; }
+
+        $stakeCents = (int) round($stakeEuros * 100);
+        $minCents = 10000 * 100; // 10k
+        if($stakeCents < $minCents){ $this->dispatch('pg-error', message: 'Mise minimum 10 000 €'); return; }
+
+        // Load participants with balances
+        $participants = User::query()->whereIn('id', $participantIds)->get();
+        if($participants->isEmpty()){ $this->dispatch('pg-error', message: 'Participants invalides'); return; }
+
+        // Compute max allowed stake based on lowest balance
+        $lowestBalanceCents = $participants->map(function(User $u){ return (int) ($u->account?->balance_cents ?? 0); })->min() ?? 0;
+        if($stakeCents > $lowestBalanceCents){
+            $this->dispatch('pg-error', message: 'Mise trop élevée pour au moins un joueur');
+            return;
+        }
+
+        // Optional betmaster must not be among participants? We allow it to be external or one of them; rules not specified.
+        if($betmasterId && !User::whereKey($betmasterId)->exists()){
+            $this->dispatch('pg-error', message: 'BetMaster invalide'); return;
+        }
+
+        try {
+            DB::transaction(function () use ($creator, $name, $description, $participants, $betmasterId, $stakeCents) {
+                // Create pending game (no debit yet)
+                $game = PhysicalGame::create([
+                    'name' => $name,
+                    'description' => $description,
+                    'created_by' => $creator->id,
+                    'betmaster_id' => $betmasterId,
+                    'status' => 'pending', // pending -> active -> completed/canceled
+                    'stake_cents' => $stakeCents,
+                    'commission_bp' => 1000, // 10%
+                ]);
+
+                foreach ($participants as $p) {
+                    PhysicalGameParticipant::create([
+                        'physical_game_id' => $game->id,
+                        'user_id' => $p->id,
+                        'status' => 'invited',
+                        'confirmed' => false,
+                    ]);
+                }
+
+                // Notify frontend
+                $this->dispatch('pg-created', gameId: $game->id);
+            });
+        } catch (\Throwable $e) {
+            $this->dispatch('pg-error', message: 'Erreur lors de la création');
+            return;
+        }
+    }
+
+    /** Participant selects a winner candidate (for consensus mode). */
+    // Player confirms participation; when all confirmed -> activate and debit stakes and house commission
+    public function confirmParticipation(int $gameId): void
+    {
+        $user = Auth::user();
+        if(!$user instanceof User){ return; }
+        DB::transaction(function() use ($user, $gameId){
+            $game = PhysicalGame::with('participants')->lockForUpdate()->find($gameId);
+            if(!$game || !in_array($game->status, ['pending','active'])){ return; }
+            $p = $game->participants->firstWhere('user_id', $user->id);
+            if(!$p){ return; }
+            if(!$p->confirmed){ $p->confirmed = true; $p->save(); }
+            // Activate and debit when all confirmed and not yet active
+            $allConfirmed = $game->participants->every(fn($pp)=> (bool)$pp->confirmed);
+            if($game->status === 'pending' && $allConfirmed){
+                $this->activatePhysicalGame($game);
+                $this->dispatch('pg-activated', gameId: $game->id);
+            }
+        });
+    }
+
+    protected function activatePhysicalGame(PhysicalGame $game): void
+    {
+        $stakeCents = (int) $game->stake_cents;
+        $house = HouseAccount::singleton();
+        $totalInCents = 0;
+        foreach ($game->participants as $p) {
+            $u = User::find($p->user_id);
+            if(!$u) { throw new \RuntimeException('Participant manquant'); }
+            $acc = $u->account()->lockForUpdate()->first();
+            if(!$acc){ $acc = $u->account()->create(['balance_cents' => 0]); }
+            if($acc->balance_cents < $stakeCents){
+                throw new \RuntimeException('Solde insuffisant pour '.$u->name);
+            }
+            $acc->balance_cents -= $stakeCents;
+            $acc->save();
+            $u->transactions()->create([
+                'type' => 'physical_stake',
+                'amount_cents' => -$stakeCents,
+                'balance_after_cents' => $acc->balance_cents,
+                'reference' => 'PG-'.$game->id,
+                'meta' => ['physical_game_id' => $game->id],
+            ]);
+            $p->status = 'paid';
+            $p->save();
+            $totalInCents += $stakeCents;
+        }
+        // Commission to house now that game is active
+        $commissionCents = (int) floor($totalInCents * (int)$game->commission_bp / 10000);
+        if($commissionCents > 0){
+            $house->credit('physical_commission_in', $commissionCents, ['physical_game_id'=>$game->id]);
+        }
+        $game->pot_cents = max(0, $totalInCents - $commissionCents);
+        $game->status = 'active';
+        $game->save();
+    }
+
+    public function pickWinner(int $gameId, int $pickedUserId): void
+    {
+        $user = Auth::user();
+        if(!$user instanceof User){ return; }
+        $game = PhysicalGame::with('participants')->find($gameId);
+        if(!$game || $game->status !== 'active'){ return; }
+        // must be participant
+        $p = $game->participants->firstWhere('user_id', $user->id);
+        if(!$p){ return; }
+        // picked must be among participants
+        if(!$game->participants->firstWhere('user_id', $pickedUserId)){
+            $this->dispatch('pg-error', message: 'Choix invalide'); return;
+        }
+        $p->picked_winner_id = $pickedUserId;
+        $p->save();
+
+        // If no betmaster: check consensus
+        if(empty($game->betmaster_id)){
+            $picks = $game->participants->map(fn($pp)=> (int) ($pp->picked_winner_id ?? 0))->filter();
+            if($picks->isNotEmpty() && $picks->unique()->count() === 1 && $picks->count() === $game->participants->count()){
+                // all picked same winner
+                $this->resolvePhysicalGame($game->id, $picks->first());
+            }
+        }
+    }
+
+    /** Resolve game: if winnerUserId provided, use it (betmaster flow); else compute consensus. */
+    public function resolvePhysicalGame(int $gameId, ?int $winnerUserId = null, bool $cancel=false): void
+    {
+        $actor = Auth::user();
+        if(!$actor instanceof User){ return; }
+
+        $game = PhysicalGame::with('participants')->lockForUpdate()->find($gameId);
+        if(!$game || !in_array($game->status, ['active'])){ return; }
+
+        // Authorization: betmaster can resolve with explicit winner; participants auto-resolve by consensus
+        $isBetmaster = $game->betmaster_id && $actor->id === (int) $game->betmaster_id;
+        if ($game->betmaster_id) {
+            if (!$isBetmaster) { return; }
+            if(!$winnerUserId && !$cancel){ $this->dispatch('pg-error', message: 'Gagnant requis'); return; }
+        } else {
+            // consensus: winnerUserId optional; compute if not provided
+            if(!$winnerUserId && !$cancel){
+                $u = $game->participants->map(fn($pp)=> (int) ($pp->picked_winner_id ?? 0))->filter();
+                if($u->isEmpty() || $u->unique()->count() !== 1 || $u->count() !== $game->participants->count()){
+                    $this->dispatch('pg-error', message: 'Pas de consensus'); return;
+                }
+                $winnerUserId = $u->first();
+            }
+        }
+
+        if(!$cancel){
+            // Validate winner belongs to game
+            if(!$game->participants->firstWhere('user_id', $winnerUserId)){
+                $this->dispatch('pg-error', message: 'Gagnant invalide'); return;
+            }
+        }
+
+        // Payout pot to winner or refund
+        DB::transaction(function () use ($game, $winnerUserId, $cancel) {
+            if($cancel){
+                // Refund each participant equal stake (already net of commission because pot was computed as total - commission)
+                foreach ($game->participants as $p) {
+                    $u = User::find($p->user_id);
+                    if(!$u) continue;
+                    $acc = $u->account()->lockForUpdate()->first();
+                    if(!$acc){ $acc = $u->account()->create(['balance_cents' => 0]); }
+                    $acc->balance_cents += (int) $game->stake_cents; // refund full stake; commission stays with house?
+                    $acc->save();
+                    $u->transactions()->create([
+                        'type' => 'physical_refund',
+                        'amount_cents' => (int) $game->stake_cents,
+                        'balance_after_cents' => $acc->balance_cents,
+                        'reference' => 'PG-'.$game->id,
+                        'meta' => ['physical_game_id' => $game->id],
+                    ]);
+                }
+                $game->status = 'canceled';
+                $game->save();
+                $this->dispatch('pg-resolved', gameId: $game->id, winnerId: null);
+                return;
+            }
+
+            $winner = User::find($winnerUserId);
+            if(!$winner){ throw new \RuntimeException('Winner missing'); }
+            $acc = $winner->account()->lockForUpdate()->first();
+            if(!$acc){ $acc = $winner->account()->create(['balance_cents' => 0]); }
+            $acc->balance_cents += (int) $game->pot_cents;
+            $acc->save();
+            $winner->transactions()->create([
+                'type' => 'physical_win',
+                'amount_cents' => (int) $game->pot_cents,
+                'balance_after_cents' => $acc->balance_cents,
+                'reference' => 'PG-'.$game->id,
+                'meta' => ['physical_game_id' => $game->id],
+            ]);
+
+            $game->winner_id = $winner->id;
+            $game->status = 'completed';
+            $game->save();
+
+            $this->dispatch('pg-resolved', gameId: $game->id, winnerId: $winner->id);
         });
     }
 }

@@ -183,6 +183,7 @@
         <div class="mt-6 md:mt-8 text-center">
             <p class="text-gray-400 text-sm md:text-base">Engagez la partie et montez au classement.</p>
         </div>
+    @php $pgList = $physicalGames ?? collect(); @endphp
     </main>
     @php
         $userBalance = (int) floor((auth()->user()->balance_cents ?? 0) / 100);
@@ -222,7 +223,30 @@
         })->values();
     @endphp
     <script id="adminPlayersData" type="application/json">{!! json_encode($adminPlayersPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
-    <script id="donationPlayersData" type="application/json">{!! json_encode(($donationPlayers ?? collect())->map(fn($u)=>['id'=>$u->id,'pseudo'=>$u->name])->values(), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
+    <script id="donationPlayersData" type="application/json">{!! json_encode(($donationPlayers ?? collect())->map(function($u){
+        $balCents = (int) ($u->balance_cents ?? 0);
+        return ['id'=>$u->id,'pseudo'=>$u->name,'balance'=>$balCents/100];
+    })->values(), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
+    @php
+        $physicalGamesPayload = ($physicalGames ?? collect())->map(function($g){
+            return [
+                'id' => (int) $g->id,
+                'name' => (string) $g->name,
+                'description' => (string) ($g->description ?? ''),
+                'stake' => (int) floor(((int) $g->stake_cents)/100),
+                'pot' => (int) floor(((int) $g->pot_cents)/100),
+                'betmasterId' => $g->betmaster_id ? (int) $g->betmaster_id : null,
+                'status' => (string) $g->status,
+                'participants' => ($g->participants ?? collect())->map(fn($p)=>[
+                    'id'=>(int)$p->user_id,
+                    'name'=>(string) optional($p->user)->name,
+                    'confirmed'=> (bool) ($p->confirmed ?? false),
+                    'pickedWinnerId' => (int) ($p->picked_winner_id ?? 0),
+                ])->values(),
+            ];
+        })->values();
+    @endphp
+    <script id="physicalGamesData" type="application/json">{!! json_encode($physicalGamesPayload, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
         <script id="betData" type="application/json">{!! json_encode(['events' => $betEventsPayload, 'activeBets' => $userBetsPayload], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) !!}</script>
         @if(($houseStats ?? null))
         <script id="houseStatsData" type="application/json">{!! json_encode([
@@ -378,8 +402,11 @@ document.addEventListener('DOMContentLoaded', function() {
             <h3 class="text-lg md:text-2xl font-bold text-red-400 flex items-center gap-2">🔥 Paris & Parties en cours</h3>
             <button data-close="modalPariesEnCours" class="text-gray-400 hover:text-white text-xl font-bold">×</button>
         </div>
-        <div class="px-5 pt-3 pb-2 text-[11px] text-gray-400">Vue synthétique des engagements actifs (données fictives).</div>
-        <div id="listePariesEnCours" class="flex-1 overflow-y-auto classement-scrollbar px-5 pb-5 space-y-4"></div>
+        <div class="px-5 pt-3 pb-2 text-[11px] text-gray-400">Vue synthétique des engagements actifs.</div>
+        <div id="listePariesEnCours" class="flex-1 overflow-y-auto classement-scrollbar px-5 pb-5 space-y-4">
+            <div id="physicalGamesList" class="space-y-3"></div>
+            <div id="betsEnCoursList" class="space-y-3"></div>
+        </div>
         <div class="px-5 py-3 border-t border-red-800 flex justify-end bg-black/40">
             <button data-close="modalPariesEnCours" class="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-sm font-semibold">Fermer</button>
         </div>
@@ -472,9 +499,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         <!-- Joueurs Participants -->
         <div class="space-y-3">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between gap-2">
                 <label class="block text-xs font-semibold text-red-300">Joueurs participants</label>
-                <button id="ajouterJoueurBtn" type="button" class="px-3 py-1 rounded bg-red-700/60 hover:bg-red-700 text-xs font-semibold">+ Ajouter</button>
+                <div class="flex items-center gap-2">
+                    <button id="ajouterJoueurBtn" type="button" class="px-3 py-1 rounded bg-red-700/60 hover:bg-red-700 text-xs font-semibold">+ Ajouter</button>
+                    <button id="viderSelectionBtn" type="button" class="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-xs font-semibold">Vider</button>
+                </div>
             </div>
             <div class="relative">
                 <input id="rechercheJoueur" type="text" placeholder="Rechercher pseudo ou ID..." class="w-full bg-black/50 border border-red-800 focus:ring-1 focus:ring-red-600 rounded-lg px-3 py-2 pr-10 text-xs" />
@@ -515,7 +545,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
 
         <div class="bg-red-900/20 border border-red-800/40 rounded-lg p-4 text-[11px] text-gray-300 leading-relaxed">
-            Cette inscription est une simulation: aucun engagement financier réel n'est pris. Les données sont fictives.
+            Règles: mise égale pour chaque joueur. Minimum 10 000 €. Maximum = plus faible solde parmi les joueurs sélectionnés. Commission maison 10% à l'inscription.
         </div>
     </div>
     <div class="px-5 py-4 border-t border-red-800 bg-black/60 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -1064,6 +1094,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const partieNom = document.getElementById('partieNom');
     const partieDescription = document.getElementById('partieDescription');
     const ajouterJoueurBtn = document.getElementById('ajouterJoueurBtn');
+    const viderSelectionBtn = document.getElementById('viderSelectionBtn');
     const rechercheJoueur = document.getElementById('rechercheJoueur');
     const resultatsRechercheJoueur = document.getElementById('resultatsRechercheJoueur');
     const listeJoueursSelectionnes = document.getElementById('listeJoueursSelectionnes');
@@ -1388,6 +1419,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Données réelles pour dons: fournies par le backend
     const donationPlayersEl = document.getElementById('donationPlayersData');
     const poolUtilisateurs = donationPlayersEl ? JSON.parse(donationPlayersEl.textContent||'[]') : [];
+    const physicalGamesEl = document.getElementById('physicalGamesData');
+    let physicalGames = physicalGamesEl ? JSON.parse(physicalGamesEl.textContent||'[]') : [];
     let joueursSelectionnes = [];
     let arbitre = null;
     // Blackjack state
@@ -2049,6 +2082,13 @@ document.addEventListener('DOMContentLoaded', () => {
             renderJoueursSelectionnes();
         }
     });
+    viderSelectionBtn && viderSelectionBtn.addEventListener('click', ()=>{
+        if(!joueursSelectionnes.length) return;
+        if(confirm('Vider la sélection des joueurs ?')){
+            joueursSelectionnes = [];
+            renderJoueursSelectionnes();
+        }
+    });
 
     listeJoueursSelectionnes && listeJoueursSelectionnes.addEventListener('click', (e)=>{
         const btn = e.target.closest('[data-remove-joueur]');
@@ -2059,6 +2099,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    function computeStakeLimits(){
+        // min: 10k; max: lowest balance among selected players
+        const minStake = 10000;
+        let minBalance = Infinity;
+        joueursSelectionnes.forEach(j=>{ const b = parseFloat(j.balance||0); if(!isNaN(b)) minBalance = Math.min(minBalance, b); });
+        if(!isFinite(minBalance)) minBalance = 0;
+        return { min: minStake, max: Math.floor(minBalance) };
+    }
+
     function validerInscriptionPartie(){
         messageErreurInscription.classList.add('hidden');
         const nom = (partieNom?.value||'').trim();
@@ -2066,7 +2115,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if(joueursSelectionnes.length===0){ return afficherErreur('Au moins un joueur'); }
         if(joueursSelectionnes.length>3 && !arbitre){ return afficherErreur('Arbitre obligatoire (>3 joueurs)'); }
         const mise = parseFloat(inscriptionMise.value)||0;
-        if(mise<=0){ return afficherErreur('Mise commune invalide'); }
+        const lim = computeStakeLimits();
+        if(mise < lim.min){ return afficherErreur('Mise minimum 10 000 €'); }
+        if(lim.max <= 0){ return afficherErreur('Solde insuffisant chez un joueur'); }
+        if(mise > lim.max){ return afficherErreur('Mise dépasse le plus faible solde'); }
         const payload = {
             nom,
             description: (partieDescription?.value||'').trim(),
@@ -2075,7 +2127,16 @@ document.addEventListener('DOMContentLoaded', () => {
             mise,
             totalPotentiel: mise * joueursSelectionnes.length
         };
-        alert('(Démo) Partie créée:\n'+JSON.stringify(payload,null,2));
+        // Appel Livewire pour créer réellement
+        try {
+            const comp = lwComp();
+            if(comp){
+                const ids = payload.joueurs.map(j=>parseInt(j.id));
+                const betmasterId = payload.arbitre ? parseInt(payload.arbitre.id) : null;
+                comp.call('createPhysicalGame', payload.nom, payload.description, ids, betmasterId, parseFloat(payload.mise));
+            }
+        } catch(e) { console.warn('createPhysicalGame call error', e); }
+        // UI: fermer après appel (la liste s’actualisera au prochain render)
         closeModal(modalInscriptionPhysique);
     }
     function afficherErreur(msg){
@@ -2089,11 +2150,98 @@ document.addEventListener('DOMContentLoaded', () => {
         updateInscriptionAffichage();
         openModal(modalInscriptionPhysique);
     });
-    confirmerInscriptionPhysiqueBtn && confirmerInscriptionPhysiqueBtn.addEventListener('click', () => {
-        const v = parseFloat(inscriptionMise.value)||0;
-        alert('(Démo) Proposition enregistrée: ' + v.toLocaleString('fr-FR') + ' €');
-        closeModal(modalInscriptionPhysique);
-    });
+    // Render physical games inside the modal list with confirm participation and voting
+    function renderPhysicalGames(){
+        const container = document.getElementById('physicalGamesList');
+        if(!container) return;
+        const me = parseInt(document.getElementById('adminPlayersData')?.textContent ? JSON.parse(document.getElementById('adminPlayersData').textContent).currentUserId : (document.getElementById('playerMeta')?.dataset?.userId || '0'));
+        container.innerHTML = physicalGames.map(g=>{
+            const amParticipant = (g.participants||[]).some(p=>parseInt(p.id)===me);
+            const myP = (g.participants||[]).find(p=>parseInt(p.id)===me);
+            const allConfirmed = (g.participants||[]).every(p=>!!p.confirmed);
+            const canVote = g.status==='active' && amParticipant && !g.betmasterId; // no voting if betmaster exists
+            const picks = {};
+            (g.participants||[]).forEach(p=>{ if(p.pickedWinnerId){ picks[p.pickedWinnerId] = (picks[p.pickedWinnerId]||0)+1; }});
+            const pickInfo = Object.entries(picks).map(([uid,c])=>`<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/30 border border-emerald-800 text-emerald-200">${c} vote(s) pour #${uid}</span>`).join(' ');
+            const header = `<div class="flex items-center justify-between gap-2"><div class="font-semibold text-emerald-300">${g.name}</div><div class="text-[10px] text-gray-400 uppercase">Mise ${g.stake.toLocaleString('fr-FR')} €</div></div>`;
+            const desc = g.description ? `<div class="text-[11px] text-gray-400 mt-1">${g.description}</div>` : '';
+            const expectedPot = g.status==='pending' ? Math.floor((g.participants.length * g.stake) * 0.9) : g.pot;
+            const pot = `<span class="px-2 py-0.5 rounded bg-emerald-800/30 text-emerald-200">Pot ${expectedPot.toLocaleString('fr-FR')} €</span>`;
+            const bm = g.betmasterId ? `<span class="px-2 py-0.5 rounded bg-black/50 border border-emerald-700 text-emerald-300">BetMaster #${g.betmasterId}</span>` : `<span class="px-2 py-0.5 rounded bg-black/50 border border-gray-600 text-gray-300">Sans arbitre</span>`;
+            const players = `<span class="px-2 py-0.5 rounded bg-black/50 border border-gray-700 text-gray-300">${g.participants.length} joueurs</span>`;
+            const statusChip = `<span class="px-2 py-0.5 rounded bg-black/40 border border-emerald-700 text-emerald-200">${g.status}</span>`;
+            const confirmBtn = (amParticipant && !myP?.confirmed) ? `<button class="px-2 py-1 rounded bg-emerald-700 text-white text-xs" data-pg-confirm="${g.id}">Confirmer participation</button>` : '';
+            const voteBlocks = canVote ? `<div class="mt-2 grid grid-cols-2 gap-2" data-pg-vote-grid="${g.id}">`+
+                g.participants.map(p=>`<button data-pg-vote="${g.id}:${p.id}" class="p-2 rounded border border-emerald-800 bg-black/50 hover:bg-black/60 text-left">
+                    <div class="text-emerald-200 font-semibold text-sm">${p.name||('Joueur #'+p.id)}</div>
+                    <div class="text-[10px] text-gray-400">#${p.id}</div>
+                </button>`).join('')+
+                `<button data-pg-cancel="${g.id}" class="p-2 rounded border border-red-800 bg-black/50 hover:bg-black/60 text-left">
+                    <div class="text-red-300 font-semibold text-sm">Annulation</div>
+                    <div class="text-[10px] text-gray-400">Annuler la partie</div>
+                </button>`+
+            `</div>` : '';
+            const picksView = pickInfo ? `<div class="mt-2 flex flex-wrap gap-1">${pickInfo}</div>` : '';
+            const body = `${desc}<div class="mt-2 flex flex-wrap gap-2 text-[10px]">${pot}${bm}${players}${statusChip}</div>${confirmBtn?('<div class="mt-2">'+confirmBtn+'</div>'):''}${voteBlocks}${picksView}`;
+            const clickable = (amParticipant || g.betmasterId===me) ? 'border-emerald-500' : 'border-gray-700 opacity-70';
+            return `<div class="rounded-lg p-3 border-2 ${clickable} bg-black/40" data-pg-id="${g.id}">${header}${body}</div>`;
+        }).join('');
+        bindPgListeners();
+    }
+
+    function bindPgListeners(){
+        // Confirm participation buttons
+        document.querySelectorAll('[data-pg-confirm]').forEach(btn=>{
+            btn.addEventListener('click', ()=>{
+                const id = parseInt(btn.getAttribute('data-pg-confirm'));
+                try{ const comp = lwComp(); if(comp){ comp.call('confirmParticipation', id); } }catch(_e){}
+            });
+        });
+        // Vote blocks
+        document.querySelectorAll('[data-pg-vote]').forEach(btn=>{
+            btn.addEventListener('click', ()=>{
+                const [gid,uid] = btn.getAttribute('data-pg-vote').split(':').map(x=>parseInt(x));
+                try{ const comp = lwComp(); if(comp){ comp.call('pickWinner', gid, uid); } }catch(_e){}
+            });
+        });
+        // Cancel block
+        document.querySelectorAll('[data-pg-cancel]').forEach(btn=>{
+            btn.addEventListener('click', ()=>{
+                const gid = parseInt(btn.getAttribute('data-pg-cancel'));
+                if(!confirm('Confirmer l\'annulation de la partie ?')) return;
+                try{ const comp = lwComp(); if(comp){ comp.call('resolvePhysicalGame', gid, null, true); } }catch(_e){}
+            });
+        });
+    }
+
+    // Re-render on open using existing refs
+    btnPariesEnCours && btnPariesEnCours.addEventListener('click', ()=>{ renderPhysicalGames(); openModal(modalPariesEnCours); });
+
+    // Lightweight toast for PG events
+    const toast = document.createElement('div');
+    toast.id = 'pgToast';
+    toast.className = 'hidden fixed bottom-4 right-4 z-[95] bg-black/80 border border-emerald-700 text-emerald-200 px-3 py-2 rounded shadow';
+    document.body.appendChild(toast);
+    function showPgToast(msg){
+        try{
+            toast.textContent = msg;
+            toast.classList.remove('hidden');
+            setTimeout(()=> toast.classList.add('hidden'), 2000);
+        }catch(_e){ /* noop */ }
+    }
+
+    function refreshComponent(){
+        try{
+            const comp = lwComp();
+            if(comp){ comp.call('$refresh'); }
+        }catch(_e){ /* noop */ }
+    }
+
+    // Listen to Livewire events to refresh PG list and notify
+    window.addEventListener('pg-created', (e)=>{ showPgToast('Partie créée'); refreshComponent(); });
+    window.addEventListener('pg-activated', (e)=>{ showPgToast('Partie démarrée'); refreshComponent(); });
+    window.addEventListener('pg-resolved', (e)=>{ showPgToast('Partie résolue'); refreshComponent(); });
+    window.addEventListener('pg-error', (e)=>{ const m=(e?.detail?.message)||'Erreur'; showPgToast(m); });
 
     filterButtons.forEach(b => {
         b.addEventListener('click', () => {

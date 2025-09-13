@@ -12,6 +12,8 @@ use App\Models\BetChoice;
 use App\Models\Bet;
 use App\Models\User;
 use App\Models\HouseAccount;
+use App\Models\PhysicalGame;
+use App\Models\PhysicalGameParticipant;
 
 class BetMaster extends Component
 {
@@ -224,7 +226,7 @@ class BetMaster extends Component
 
     public function render()
     {
-        $base = BetEvent::with(['choices' => function($q){ $q->orderBy('id'); }])
+    $base = BetEvent::with(['choices' => function($q){ $q->orderBy('id'); }])
             ->orderByDesc('id');
 
         if ($this->statusFilter === 'all') {
@@ -240,11 +242,68 @@ class BetMaster extends Component
             $clotureEvents = (clone $base)->where('status','cloture')->limit(100)->get();
         }
 
+        // Physical games for admin management
+        $pgames = PhysicalGame::with(['participants.user'])->orderByDesc('id')->limit(100)->get();
+
         return view('livewire.bet-master', [
             'events' => $events,
             'clotureEvents' => $clotureEvents,
             'isUnlocked' => $this->checkUnlocked(),
             'isAdmin' => $this->isAdmin(),
+            'pgames' => $pgames,
         ]);
+    }
+
+    // Admin direct resolve/cancel for physical games
+    public function settlePhysicalGame(int $gameId, ?int $winnerUserId = null, bool $cancel=false): void
+    {
+        if(!$this->checkUnlocked()) { $this->flashError = 'Accès verrouillé'; return; }
+        $game = PhysicalGame::with('participants')->find($gameId);
+        if(!$game){ $this->flashError = 'Partie introuvable'; return; }
+        // Reuse DashboardJoueur logic would be ideal, but replicate minimal payout/refund here
+        if($cancel){
+            if($game->status !== 'active'){ $this->flashError = 'Partie non active'; return; }
+            DB::transaction(function() use ($game){
+                foreach ($game->participants as $p) {
+                    $u = $p->user; if(!$u) continue;
+                    $acc = $u->account()->lockForUpdate()->first();
+                    if(!$acc){ $acc = $u->account()->create(['balance_cents'=>0]); }
+                    $acc->balance_cents += (int) $game->stake_cents;
+                    $acc->save();
+                    $u->transactions()->create([
+                        'type' => 'physical_refund',
+                        'amount_cents' => (int) $game->stake_cents,
+                        'balance_after_cents' => $acc->balance_cents,
+                        'reference' => 'PG-'.$game->id,
+                        'meta' => ['physical_game_id' => $game->id],
+                    ]);
+                }
+                $game->status = 'canceled';
+                $game->save();
+            });
+            $this->flashMessage = 'Partie annulée';
+            return;
+        }
+        if(!$winnerUserId){ $this->flashError = 'Gagnant requis'; return; }
+        if(!$game->participants->firstWhere('user_id', $winnerUserId)){ $this->flashError = 'Gagnant invalide'; return; }
+        DB::transaction(function() use ($game, $winnerUserId){
+            $winner = User::find($winnerUserId);
+            if(!$winner) throw new \RuntimeException('Winner missing');
+            $acc = $winner->account()->lockForUpdate()->first();
+            if(!$acc){ $acc = $winner->account()->create(['balance_cents'=>0]); }
+            $acc->balance_cents += (int) $game->pot_cents;
+            $acc->save();
+            $winner->transactions()->create([
+                'type' => 'physical_win',
+                'amount_cents' => (int) $game->pot_cents,
+                'balance_after_cents' => $acc->balance_cents,
+                'reference' => 'PG-'.$game->id,
+                'meta' => ['physical_game_id' => $game->id],
+            ]);
+            $game->winner_id = $winner->id;
+            $game->status = 'completed';
+            $game->save();
+        });
+        $this->flashMessage = 'Partie réglée';
     }
 }
