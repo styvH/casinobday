@@ -94,7 +94,8 @@ class DashboardJoueur extends Component
         // Bet events and user's active bets
         // Load events and aggregate total bet amounts per choice for odds
         $betEvents = BetEvent::with(['choices' => function($q){ $q->orderBy('id'); }])
-            ->orderByRaw("FIELD(status, 'disponible','annonce','en_cours','ferme')")
+            ->whereIn('status', ['disponible','ferme'])
+            ->orderByRaw("FIELD(status, 'disponible','ferme')")
             ->orderBy('id')
             ->limit(100)
             ->get();

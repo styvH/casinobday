@@ -1808,8 +1808,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = e.target.closest('[data-pari-id]');
         if(!card) return;
         const id = parseInt(card.getAttribute('data-pari-id'));
-    if (hasActiveBetOn(id)) { return; }
-        pariSelectionne = paris.find(p=>p.id===id);
+        // Empêcher la sélection si le pari est fermé
+        const pMeta = paris.find(p=>p.id===id);
+        if(!pMeta) return;
+        if ((pMeta.type && pMeta.type === 'ferme') || (pMeta.status && pMeta.status === 'ferme')) { return; }
+        if (hasActiveBetOn(id)) { return; }
+        pariSelectionne = pMeta;
         if(!pariSelectionne) return;
         const [label, cls] = badgeType(pariSelectionne.type);
         pariTitre.textContent = pariSelectionne.titre;
