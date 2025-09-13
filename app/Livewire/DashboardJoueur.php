@@ -460,6 +460,7 @@ class DashboardJoueur extends Component
                 betId: $bet->id,
                 eventId: $event->id,
                 choiceId: $choice->id,
+                choiceCode: $choice->code,
                 amount: $amountCents / 100.0,
                 odds: $odds,
                 potential: $potential / 100.0,

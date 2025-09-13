@@ -1032,7 +1032,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if(modalDetails) closeModal(modalDetails);
             // UI: mettre à jour la liste des paris actifs locale (optimiste)
             if(!Number.isNaN(evId)){
-                pariesActifs.unshift({ ref: evId, choix: String(choiceId), mise: Math.floor(stake) });
+                const choixCode = det.choiceCode ? String(det.choiceCode) : String(choiceId);
+                pariesActifs.unshift({ ref: evId, choix: choixCode, mise: Math.floor(stake) });
             }
             // Remplir le modal de confirmation
             const elEvent = document.getElementById('betConfirmEvent');
@@ -1042,7 +1043,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const elPotential = document.getElementById('betConfirmPotential');
             // Trouver libellés depuis la sélection courante si dispo
             let evTitle = pariSelectionne?.titre || `#${evId}`;
-            let choiceLabel = (pariSelectionne?.choices||[]).find(c=>parseInt(c.id)===choiceId)?.label || `Choix ${choiceId}`;
+            let choiceLabel = (pariSelectionne?.choices||[]).find(c=>parseInt(c.choiceId)===choiceId || String(c.id)===(det.choiceCode?String(det.choiceCode):''))?.label || `Choix ${det.choiceCode ?? choiceId}`;
             elEvent && (elEvent.textContent = evTitle);
             elChoice && (elChoice.textContent = choiceLabel);
             elOdds && (elOdds.textContent = isFinite(odds) ? odds.toFixed(2) : '—');
@@ -1156,11 +1157,17 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         listePariesEnCours.innerHTML = pariesActifs.map(pa => {
-            const pari = paris.find(p=>p.id===pa.ref);
+            const pari = paris.find(p=>parseInt(p.id)===parseInt(pa.ref));
             if(!pari) return '';
             const oddsMap = computeOdds(pari);
-            const choiceObj = pari.choices.find(c=>c.id===pa.choix);
-            const cote = oddsMap[pa.choix] || 0;
+            // pa.choix peut être code (A/B/C) ou id numérique
+            let choixCode = String(pa.choix);
+            if(/^[0-9]+$/.test(choixCode)){
+                const found = (pari.choices||[]).find(c=>parseInt(c.choiceId)===parseInt(choixCode));
+                if(found) choixCode = String(found.id);
+            }
+            const choiceObj = (pari.choices||[]).find(c=>String(c.id)===choixCode);
+            const cote = oddsMap[choixCode] || 0;
             const gainPot = pa.mise * cote;
             return `<div class=\"border border-red-800/40 rounded-xl p-4 bg-black/40 hover:border-red-500/70 transition\">\n                <div class=\"flex flex-col md:flex-row md:items-center md:justify-between gap-3\">\n                    <div class=\"flex-1\">\n                        <div class=\"text-red-300 font-semibold\">${pari.titre}</div>\n                        <div class=\"text-[11px] text-gray-400 mt-0.5\">Choix: <span class=\"text-gray-200\">${choiceObj?choiceObj.label:pa.choix}</span></div>\n                        <div class=\"mt-1 flex flex-wrap gap-2 text-[10px]\">\n                            <span class=\"px-2 py-0.5 rounded-full bg-red-800/40 text-red-200\">Côte ${cote.toFixed(2)}</span>\n                            <span class=\"px-2 py-0.5 rounded-full bg-gray-700/40 text-gray-200\">Participants ${pari.choices.reduce((s,c)=>s+c.participants,0)}</span>\n                        </div>\n                    </div>\n                    <div class=\"grid grid-cols-2 gap-3 md:text-right text-sm font-mono\">\n                        <div class=\"bg-black/50 rounded-lg p-2 border border-red-900/40\">\n                            <div class=\"text-[10px] uppercase text-gray-400 tracking-wide\">Mise</div>\n                            <div class=\"text-red-400 font-bold\">${pa.mise.toLocaleString('fr-FR')} €</div>\n                        </div>\n                        <div class=\"bg-black/50 rounded-lg p-2 border border-red-900/40\">\n                            <div class=\"text-[10px] uppercase text-gray-400 tracking-wide\">Gain Pot.</div>\n                            <div class=\"text-green-400 font-bold\">${gainPot.toFixed(2).toLocaleString('fr-FR')} €</div>\n                        </div>\n                    </div>\n                </div>\n            </div>`;
         }).join('');
